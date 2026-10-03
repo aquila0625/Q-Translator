@@ -87,7 +87,7 @@ struct ComposerView: View {
                     Button("粘贴剪贴板", systemImage: "doc.on.clipboard") { paste() }
                     Divider()
                     Button("面对面对话", systemImage: "person.2") { controller.showFaceToFace = true }
-                    Button("同声传译", systemImage: "captions.bubble") { controller.showInterpreter = true }
+                    Button("同声传译", systemImage: "captions.bubble") { controller.startInterpretation() }
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 18, weight: .medium))

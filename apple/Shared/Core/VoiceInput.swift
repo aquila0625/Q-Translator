@@ -136,7 +136,8 @@ final class VoiceInput: ObservableObject {
     private func startEngine() throws {
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers, .defaultToSpeaker, .allowBluetoothHFP])
+        // 不用蓝牙通话模式：开始录音时切换要一两秒，切换没完成就开始录会收不到声音。用手机麦克风收音
+        try session.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers, .defaultToSpeaker, .allowBluetoothA2DP])
         try session.setActive(true, options: .notifyOthersOnDeactivation)
         #endif
         Speaker.shared.stop()
@@ -157,6 +158,21 @@ final class VoiceInput: ObservableObject {
         sink.setFile(file)
         audioName = file == nil ? nil : name
 
+        try installTap()
+        engine.prepare()
+        try engine.start()
+        lastAudioAt = Date()
+        observeAudioChanges()
+    }
+
+    private var lastAudioAt = Date()
+    private var watchdog: Task<Void, Never>?
+    private var audioObservers: [NSObjectProtocol] = []
+
+    private func installTap() throws {
+        let input = engine.inputNode
+        let format = input.outputFormat(forBus: 0)
+        guard format.sampleRate > 0, format.channelCount > 0 else { throw VoiceError.noMicrophone }
         input.removeTap(onBus: 0)
         let sink = self.sink
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
@@ -165,15 +181,48 @@ final class VoiceInput: ObservableObject {
             let level = Self.level(of: buffer)
             Task { @MainActor in
                 guard let self else { return }
+                self.lastAudioAt = Date()
                 self.levels.removeFirst()
                 self.levels.append(level)
             }
         }
+    }
+
+    /// 声音设备变了或者超过 2 秒没收到声音：重装录音回调再开始
+    private func observeAudioChanges() {
+        audioObservers.forEach(NotificationCenter.default.removeObserver)
+        audioObservers = [NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine,
+                                                                 queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.restartAudio() }
+        }]
+        watchdog?.cancel()
+        watchdog = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard let self, self.state == .listening else { continue }
+                if Date().timeIntervalSince(self.lastAudioAt) > 2 { self.restartAudio() }
+            }
+        }
+    }
+
+    private func restartAudio() {
+        guard state == .listening else { return }
+        lastAudioAt = Date()
+        engine.stop()
+        engine.inputNode.removeTap(onBus: 0)
+        #if os(iOS)
+        try? AVAudioSession.sharedInstance().setActive(true)
+        #endif
+        try? installTap()
         engine.prepare()
-        try engine.start()
+        try? engine.start()
     }
 
     private func stopEngine() {
+        watchdog?.cancel()
+        watchdog = nil
+        audioObservers.forEach(NotificationCenter.default.removeObserver)
+        audioObservers = []
         if engine.isRunning { engine.stop() }
         engine.inputNode.removeTap(onBus: 0)
         sink.setFile(nil)

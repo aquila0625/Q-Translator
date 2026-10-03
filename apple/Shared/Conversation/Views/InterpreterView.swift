@@ -11,8 +11,17 @@ struct InterpreterView: View {
     /// 已经保存过（点了结束）；用其他方式关掉时也要保存
     @State private var saved = false
 
+    /// 接着录的那条记录，以及它已经有的字幕和时长
+    private let continuing: UUID?
+    private let previous: [TranscriptLine]
+    private let previousDuration: TimeInterval
+
     init(controller: ConversationController) {
         self.controller = controller
+        let turn = controller.interpreterContinue.flatMap { controller.store.turn(controller.currentID, $0) }
+        continuing = turn?.id
+        previous = turn?.transcript ?? []
+        previousDuration = turn?.transcriptDuration ?? 0
         let translator = LiveTranslator { text, chinese in await controller.translate(text, fromChinese: chinese) }
         _translator = StateObject(wrappedValue: translator)
         _interpreter = StateObject(wrappedValue: Interpreter { text, chinese, live in
@@ -30,8 +39,10 @@ struct InterpreterView: View {
         // 专用的本机翻译通道，一直开着
         .translationTask(translator.configuration) { session in await translator.run(session) }
         .task {
-            await translator.prepare(fromChinese: sourceIsChinese)
-            await interpreter.start(sourceIsChinese: sourceIsChinese)
+            // 继续录时沿用那条记录的方向（不改设置里的默认方向）
+            let chinese = continuing.flatMap { controller.store.turn(controller.currentID, $0)?.sourceIsChinese } ?? sourceIsChinese
+            await translator.prepare(fromChinese: chinese)
+            await interpreter.start(sourceIsChinese: chinese)
         }
         .onDisappear {
             guard !saved else { return }
@@ -55,7 +66,7 @@ struct InterpreterView: View {
                 Task {
                     await translator.prepare(fromChinese: !interpreter.sourceIsChinese)
                     await interpreter.switchDirection()
-                    sourceIsChinese = interpreter.sourceIsChinese
+                    if continuing == nil { sourceIsChinese = interpreter.sourceIsChinese }
                 }
             } label: {
                 HStack(spacing: 8) {
@@ -66,7 +77,7 @@ struct InterpreterView: View {
                         .font(.callout.weight(.semibold))
                     Image(systemName: "arrow.left.arrow.right").font(.caption.weight(.bold)).foregroundStyle(.secondary)
                     TimelineView(.periodic(from: .now, by: 1)) { _ in
-                        Text(AudioReplayButton.format(interpreter.elapsed))
+                        Text(AudioReplayButton.format(previousDuration + interpreter.elapsed))
                             .font(.callout.monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
@@ -95,6 +106,26 @@ struct InterpreterView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
+                    // 继续录：先显示之前录过的字幕，中间用一条分隔线隔开
+                    ForEach(previous) { line in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(line.original).font(.callout).foregroundStyle(.tertiary)
+                            Text(line.translation).font(.system(size: 17, weight: .medium)).foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    if !previous.isEmpty {
+                        HStack {
+                            VStack { Divider() }
+                            Text("继续 · " + Date().formatted(date: .omitted, time: .shortened))
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Color.lxTranscriptInk)
+                            VStack { Divider() }
+                        }
+                        .padding(.vertical, 6)
+                    }
                     ForEach(interpreter.segments) { segment in
                         VStack(alignment: .leading, spacing: 3) {
                             Text(segment.original)
@@ -155,7 +186,7 @@ struct InterpreterView: View {
             }
             .padding(20)
         default:
-            if interpreter.segments.isEmpty, interpreter.live.isEmpty, interpreter.state == .running {
+            if previous.isEmpty, interpreter.segments.isEmpty, interpreter.live.isEmpty, interpreter.state == .running {
                 VStack(spacing: 8) {
                     Image(systemName: "waveform").font(.largeTitle).foregroundStyle(Color.lxAccent)
                     Text(interpreter.sourceIsChinese ? "正在听中文，说完一句就会翻译" : "正在听英语，说完一句就会翻译")
@@ -207,7 +238,7 @@ struct InterpreterView: View {
 
     private func save() {
         controller.saveTranscript(interpreter.segments, duration: interpreter.elapsed,
-                                  sourceIsChinese: interpreter.sourceIsChinese)
+                                  sourceIsChinese: interpreter.sourceIsChinese, into: continuing)
         Speaker.shared.stop()
     }
 }
@@ -220,8 +251,11 @@ struct TranscriptCard: View {
     let date: Date
     let expanded: Bool
     let onToggleExpand: () -> Void
+    /// 接着往这条记录里录（比如讲座中间休息完）
+    var onContinue: () -> Void = {}
 
-    private var shown: [TranscriptLine] { expanded ? lines : Array(lines.prefix(3)) }
+    /// 收起时显示最后三句：继续录的时候最新的内容在下面
+    private var shown: [TranscriptLine] { expanded ? lines : Array(lines.suffix(3)) }
 
     private var allText: String {
         lines.map { $0.original + "\n" + $0.translation }.joined(separator: "\n\n")
@@ -237,6 +271,9 @@ struct TranscriptCard: View {
                 Spacer(minLength: 0)
                 CopyButton(text: allText, label: "复制全部字幕", title: "复制全部")
             }
+            if !expanded, lines.count > 3 {
+                Text("… 前面还有 \(lines.count - 3) 句").font(.caption).foregroundStyle(.tertiary)
+            }
             ForEach(shown) { line in
                 VStack(alignment: .leading, spacing: 2) {
                     Text(line.original).font(.footnote).foregroundStyle(.secondary)
@@ -245,15 +282,30 @@ struct TranscriptCard: View {
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            if lines.count > 3 {
-                Button(action: onToggleExpand) {
-                    Label(expanded ? "收起" : "展开全部 \(lines.count) 句", systemImage: expanded ? "chevron.up" : "chevron.down")
+            HStack {
+                if lines.count > 3 {
+                    Button(action: onToggleExpand) {
+                        Label(expanded ? "收起" : "展开全部 \(lines.count) 句", systemImage: expanded ? "chevron.up" : "chevron.down")
+                            .font(.footnote.weight(.semibold))
+                            .frame(minHeight: 36)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.lxTranscriptInk)
+                }
+                Spacer(minLength: 0)
+                Button(action: onContinue) {
+                    Label("继续传译", systemImage: "mic.fill")
                         .font(.footnote.weight(.semibold))
-                        .frame(minHeight: 32)
+                        .foregroundStyle(Color.lxBackground)
+                        .padding(.horizontal, 14)
+                        .frame(height: 32)
+                        .background(Color.lxTranscriptInk, in: .capsule)
+                        .frame(minHeight: 44)
                         .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(Color.lxTranscriptInk)
+                .accessibilityHint("接着往这条记录里录")
             }
         }
         .padding(12)

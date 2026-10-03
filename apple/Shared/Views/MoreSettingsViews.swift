@@ -202,7 +202,10 @@ struct SpeechVoicesView: View {
             Section {
                 HStack {
                     Image(systemName: "tortoise").foregroundStyle(.secondary)
-                    Slider(value: $rate, in: 0.3...0.62)
+                    Slider(value: $rate, in: 0.3...0.62) { editing in
+                        // 拖完读一句，听听这个语速
+                        if !editing { play("Hi, the plumber will come by tomorrow morning.", voice: nil) }
+                    }
                     Image(systemName: "hare").foregroundStyle(.secondary)
                 }
             } header: {
@@ -253,11 +256,7 @@ struct SpeechVoicesView: View {
             }
             Spacer()
             Button {
-                preview.stopSpeaking(at: .immediate)
-                let utterance = AVSpeechUtterance(string: sample)
-                utterance.voice = voice ?? AVSpeechSynthesisVoice(language: name == "默认" && sample.isMostlyChinese ? "zh-CN" : "en-US")
-                utterance.rate = Float(rate)
-                preview.speak(utterance)
+                play(sample, voice: voice)
             } label: {
                 Image(systemName: "speaker.wave.2").frame(width: 36, height: 32)
             }
@@ -265,7 +264,23 @@ struct SpeechVoicesView: View {
             .accessibilityLabel("试听\(name)")
         }
         .contentShape(.rect)
-        .onTapGesture { selection.wrappedValue = id }
+        .onTapGesture {
+            // 选中就读一句试听
+            selection.wrappedValue = id
+            play(sample, voice: voice)
+        }
+    }
+
+    private func play(_ sample: String, voice: AVSpeechSynthesisVoice?) {
+        preview.stopSpeaking(at: .immediate)
+        #if os(iOS)
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
+        try? AVAudioSession.sharedInstance().setActive(true)
+        #endif
+        let utterance = AVSpeechUtterance(string: sample)
+        utterance.voice = voice ?? AVSpeechSynthesisVoice(language: sample.isMostlyChinese ? "zh-CN" : (Speaker.defaultAccent == 1 ? "en-GB" : "en-US"))
+        utterance.rate = Float(rate)
+        preview.speak(utterance)
     }
 
     private func tag(_ text: String, _ color: Color) -> some View {

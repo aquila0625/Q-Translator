@@ -97,9 +97,10 @@ final class Interpreter: ObservableObject {
 
     func resume() {
         guard state == .paused else { return }
-        try? engine.start()
+        lastAudioAt = Date()
         startedAt = Date()
         state = .running
+        if (try? engine.start()) == nil { restartAudio(reason: "继续") }
     }
 
     /// 结束：把还没说完的那一句也收进来
@@ -342,16 +343,32 @@ final class Interpreter: ObservableObject {
     private var targetFormat: AVAudioFormat?
     private let sink = AnalyzerSink()
 
+    /// 最近一次收到声音的时间；超过 2 秒没收到就自动重启录音
+    private var lastAudioAt = Date()
+    private var watchdog: Task<Void, Never>?
+    private var audioObservers: [NSObjectProtocol] = []
+
     private func startAudio() throws {
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
-        // 用耳机朗读译文时也能继续收音
-        try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothA2DP, .allowBluetoothHFP, .defaultToSpeaker])
+        // 只用蓝牙的高音质播放（A2DP）：声音用手机麦克风收，译文从耳机放。
+        // 不用蓝牙通话模式（HFP）：开始录音时切换通话模式要一两秒，切换没完成就开始录会收不到声音
+        try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothA2DP, .defaultToSpeaker])
         try session.setActive(true)
         #endif
+        try installTap()
+        engine.prepare()
+        try engine.start()
+        lastAudioAt = Date()
+        observeAudioChanges()
+        startWatchdog()
+    }
+
+    /// 按当前的声音设备格式装录音回调（换了设备格式会变，要重装）
+    private func installTap() throws {
         let node = engine.inputNode
         let format = node.outputFormat(forBus: 0)
-        guard format.sampleRate > 0 else { throw InterpreterError.noMicrophone }
+        guard format.sampleRate > 0, format.channelCount > 0 else { throw InterpreterError.noMicrophone }
         // 新识别模型要转换成它要的格式；老接口直接收原始声音
         var converter: AVAudioConverter?
         if let target = targetFormat {
@@ -370,15 +387,68 @@ final class Interpreter: ObservableObject {
             let level = Self.level(of: buffer)
             Task { @MainActor in
                 guard let self else { return }
+                self.lastAudioAt = Date()
                 self.levels.removeFirst()
                 self.levels.append(level)
             }
         }
-        engine.prepare()
-        try engine.start()
+    }
+
+    /// 声音设备变了（插拔耳机、蓝牙连上断开）或者被打断（来电、Siri）结束后，重启录音
+    private func observeAudioChanges() {
+        removeAudioObservers()
+        let center = NotificationCenter.default
+        audioObservers.append(center.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.restartAudio(reason: "设备变化") }
+        })
+        #if os(iOS)
+        audioObservers.append(center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in
+            let ended = (note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt) == AVAudioSession.InterruptionType.ended.rawValue
+            Task { @MainActor in if ended { self?.restartAudio(reason: "打断结束") } }
+        })
+        #endif
+    }
+
+    private func removeAudioObservers() {
+        audioObservers.forEach(NotificationCenter.default.removeObserver)
+        audioObservers = []
+    }
+
+    private func startWatchdog() {
+        watchdog?.cancel()
+        watchdog = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard let self, self.state == .running else { continue }
+                if Date().timeIntervalSince(self.lastAudioAt) > 2 { self.restartAudio(reason: "超过 2 秒没有声音") }
+            }
+        }
+    }
+
+    private func restartAudio(reason: String) {
+        guard state == .running else { return }
+        log.info("interpreter: restart audio, \(reason, privacy: .public)")
+        lastAudioAt = Date()
+        engine.stop()
+        engine.inputNode.removeTap(onBus: 0)
+        do {
+            #if os(iOS)
+            try AVAudioSession.sharedInstance().setActive(true)
+            #endif
+            try installTap()
+            engine.prepare()
+            try engine.start()
+            // 老识别接口换了声音格式要重开一次
+            if legacyRecognizer != nil { startLegacyTask() }
+        } catch {
+            log.error("interpreter: restart failed \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private func stopAudio() {
+        watchdog?.cancel()
+        watchdog = nil
+        removeAudioObservers()
         if engine.isRunning { engine.stop() }
         engine.inputNode.removeTap(onBus: 0)
         sink.setContinuation(nil)

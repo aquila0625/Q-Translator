@@ -81,7 +81,8 @@ struct TurnView: View {
     var body: some View {
         if let transcript = turn.transcript {
             TranscriptCard(lines: transcript, duration: turn.transcriptDuration, sourceIsChinese: turn.sourceIsChinese,
-                           date: turn.createdAt, expanded: expanded, onToggleExpand: onToggleExpand)
+                           date: turn.createdAt, expanded: expanded, onToggleExpand: onToggleExpand,
+                           onContinue: { controller.continueInterpretation(turn.id) })
                 .contentShape(.rect)
                 .onTapGesture(perform: onSelect)
                 #if os(macOS)

@@ -125,10 +125,33 @@ final class ConversationController: ObservableObject {
     // MARK: 同声传译
 
     @Published var showInterpreter = false
+    /// 要接着录的那条传译记录；nil 表示新开一条
+    @Published private(set) var interpreterContinue: UUID?
 
-    /// 结束同传：整段字幕作为一轮保存
-    func saveTranscript(_ segments: [Interpreter.Segment], duration: TimeInterval, sourceIsChinese: Bool) {
+    /// 从“+”菜单开始：新开一条传译记录
+    func startInterpretation() {
+        interpreterContinue = nil
+        showInterpreter = true
+    }
+
+    /// 在传译记录上点“继续”：接着往这一条里录
+    func continueInterpretation(_ turnID: UUID) {
+        interpreterContinue = turnID
+        showInterpreter = true
+    }
+
+    /// 结束同传：新的一条作为一轮保存；继续录的就接在原来那条后面，时长累加
+    func saveTranscript(_ segments: [Interpreter.Segment], duration: TimeInterval, sourceIsChinese: Bool, into turnID: UUID?) {
         let lines = segments.map { TranscriptLine(original: $0.original, translation: $0.translation ?? "") }
+        if let turnID, store.turn(currentID, turnID) != nil {
+            store.updateTurn(currentID, turnID) {
+                $0.transcript = ($0.transcript ?? []) + lines
+                $0.transcriptDuration = ($0.transcriptDuration ?? 0) + duration
+                $0.source = ($0.transcript ?? []).map(\.original).joined(separator: "\n")
+            }
+            store.updateSession(currentID) { $0.updatedAt = Date() }
+            return
+        }
         guard !lines.isEmpty else { return }
         var turn = Turn(source: lines.map(\.original).joined(separator: "\n"), sourceIsChinese: sourceIsChinese)
         turn.transcript = lines
