@@ -33,7 +33,7 @@ final class Interpreter: ObservableObject {
     /// 原文语言：true 是中文（中 → 英），false 是英语（英 → 中）
     @Published private(set) var sourceIsChinese = false
     /// 用耳机朗读译文
-    @Published var speakTranslations = false
+    @Published var speakTranslations = UserDefaults.standard.bool(forKey: SettingsKey.interpreterSpeak)
 
     /// (文字, 原文是否中文, 是否还没说完的半句) -> 译文
     private let translate: (String, Bool, Bool) async -> String?

@@ -89,6 +89,7 @@ struct WideRootView: View {
             await controller.translator.run(session)
         }
         .sheet(item: $sheet) { RootSheetContent(sheet: $0, controller: controller) }
+        .appAppearance()
         .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in sheet = .settings }
     }
 }

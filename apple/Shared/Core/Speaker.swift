@@ -107,7 +107,14 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
 
     private func synthesize(_ speech: Speech) {
         let utterance = AVSpeechUtterance(string: speech.text)
-        utterance.voice = AVSpeechSynthesisVoice(language: speech.isChinese ? "zh-CN" : (speech.accent == 1 ? "en-GB" : "en-US"))
+        let defaults = UserDefaults.standard
+        // 设置里选了音色就用它，没选按口音用系统默认
+        let chosen = defaults.string(forKey: speech.isChinese ? SettingsKey.voiceChinese : SettingsKey.voiceEnglish) ?? ""
+        utterance.voice = (chosen.isEmpty ? nil : AVSpeechSynthesisVoice(identifier: chosen))
+            ?? AVSpeechSynthesisVoice(language: speech.isChinese ? "zh-CN" : (speech.accent == 1 ? "en-GB" : "en-US"))
+        if defaults.object(forKey: SettingsKey.speechRate) != nil {
+            utterance.rate = Float(defaults.double(forKey: SettingsKey.speechRate))
+        }
         self.utterance = utterance
         synthesizer.speak(utterance)
     }
@@ -137,4 +144,13 @@ enum SettingsKey {
     static let showAIUsage = "ai.showUsage"
     /// 语音输入说完后直接翻译（默认先放进输入框，可以改）
     static let voiceAutoSend = "voice.autoSend"
+    /// 外观：0 跟随系统，1 浅色，2 深色
+    static let appearance = "ui.appearance"
+    /// 朗读语速（AVSpeechUtterance 的 rate，默认 0.5）和选的音色（空表示默认）
+    static let speechRate = "speech.rate"
+    static let voiceEnglish = "speech.voice.en"
+    static let voiceChinese = "speech.voice.zh"
+    /// 同声传译默认用耳机朗读译文；面对面对话朗读译文
+    static let interpreterSpeak = "interpreter.speak"
+    static let dialogSpeak = "dialog.speak"
 }

@@ -22,7 +22,7 @@ struct FaceToFaceView: View {
     /// 正在说话的一方：true 是我（中文），false 是对方（英语）
     @State private var speakingMine: Bool?
     @State private var translating = false
-    @AppStorage("dialog.speak") private var speakTranslation = true
+    @AppStorage(SettingsKey.dialogSpeak) private var speakTranslation = true
 
     var body: some View {
         VStack(spacing: 0) {

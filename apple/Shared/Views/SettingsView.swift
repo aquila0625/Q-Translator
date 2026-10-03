@@ -7,6 +7,11 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.autoSpeak) private var autoSpeak = false
     @AppStorage(SettingsKey.showAIUsage) private var showUsage = false
     @AppStorage(SettingsKey.voiceAutoSend) private var voiceAutoSend = false
+    @AppStorage(SettingsKey.appearance) private var appearance = 0
+    @AppStorage(SettingsKey.interpreterSpeak) private var interpreterSpeak = false
+    @AppStorage(SettingsKey.dialogSpeak) private var dialogSpeak = true
+    @AppStorage("interpreter.sourceIsChinese") private var interpreterFromChinese = false
+    @AppStorage("voice.language") private var voiceLanguage = "en-US"
 
     @ObservedObject private var usage = UsageStore.shared
     @State private var testing = false
@@ -15,6 +20,25 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("外观") {
+                    Picker("主题", selection: $appearance) {
+                        Text("跟随系统").tag(0)
+                        Text("浅色").tag(1)
+                        Text("深色").tag(2)
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                Section {
+                    NavigationLink {
+                        OfflineModelsView()
+                    } label: {
+                        Label("离线翻译和语音识别模型", systemImage: "arrow.down.circle")
+                    }
+                } footer: {
+                    Text("下载后不用联网、不限量，翻译和同声传译都会快很多。")
+                }
+
                 Section {
                     Picker("服务商", selection: $ai.provider) {
                         ForEach(AIProvider.allCases) { Text($0.title).tag($0) }
@@ -75,10 +99,26 @@ struct SettingsView: View {
 
                 Section {
                     Toggle("说完自动翻译", isOn: $voiceAutoSend)
+                    Picker("“自动”方向时先听", selection: $voiceLanguage) {
+                        Text("英语").tag("en-US")
+                        Text("中文").tag("zh-CN")
+                    }
                 } header: {
                     Text("语音输入")
                 } footer: {
-                    Text("关闭时，说的话先放进输入框，可以改完再翻译。识别在本机完成，录音只保存在本机，可以在会话里回放。")
+                    Text("关闭“说完自动翻译”时，说的话先放进输入框，可以改完再翻译。翻译方向选了中→英或英→中时，按方向识别；正在听的时候也可以点一下切换。录音只保存在本机，可以在会话里回放。")
+                }
+
+                Section("同声传译") {
+                    Picker("默认方向", selection: $interpreterFromChinese) {
+                        Text("英 → 中").tag(false)
+                        Text("中 → 英").tag(true)
+                    }
+                    Toggle("默认朗读译文（建议戴耳机）", isOn: $interpreterSpeak)
+                }
+
+                Section("面对面对话") {
+                    Toggle("翻译后朗读出来", isOn: $dialogSpeak)
                 }
 
                 Section("朗读") {
@@ -87,12 +127,14 @@ struct SettingsView: View {
                         Text("美式").tag(2)
                     }
                     Toggle("查词后自动朗读", isOn: $autoSpeak)
+                    NavigationLink("音色和语速") { SpeechVoicesView() }
                 }
 
                 Section {
                     LabeledContent("单词", value: "有道词典（在线）")
                     LabeledContent("句子和段落", value: "系统离线翻译，其次 MyMemory")
                     LabeledContent("图片文字", value: "本机识别，不上传")
+                    LabeledContent("语音", value: "本机识别，不上传")
                 } header: {
                     Text("翻译来源")
                 } footer: {
@@ -119,6 +161,7 @@ struct SettingsView: View {
         #endif
         .presentationDragIndicator(.visible)
         .tint(.lxAccent)
+        .appAppearance()
     }
 
     private func test() {

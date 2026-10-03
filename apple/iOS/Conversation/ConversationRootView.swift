@@ -8,11 +8,14 @@ struct ConversationRootView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
-        if sizeClass == .regular {
-            WideRootView(controller: controller)
-        } else {
-            PhoneRootView(controller: controller)
+        Group {
+            if sizeClass == .regular {
+                WideRootView(controller: controller)
+            } else {
+                PhoneRootView(controller: controller)
+            }
         }
+        .appAppearance()
     }
 }
 
