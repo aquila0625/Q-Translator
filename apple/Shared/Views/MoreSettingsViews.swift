@@ -184,126 +184,143 @@ struct OfflineModelsView: View {
 
 // MARK: 朗读声音
 
-/// 朗读的音色和语速：英文、中文分别选，可以试听。“增强 / 高级”音色可以在系统设置里免费下载
+/// 朗读的音色和语速：AI 音色（更像真人，要 ChatGPT 的 Key）或精选的系统音色，选中就读一句试听
 struct SpeechVoicesView: View {
     @AppStorage(SettingsKey.voiceEnglish) private var englishVoice = ""
     @AppStorage(SettingsKey.voiceChinese) private var chineseVoice = ""
+    @AppStorage(SettingsKey.aiVoice) private var aiVoice = ""
     @AppStorage(SettingsKey.speechRate) private var rate = 0.5
+    @ObservedObject private var speaker = Speaker.shared
     @State private var preview = AVSpeechSynthesizer()
+    @State private var hint: String?
 
-    private static func voices(_ prefix: String) -> [AVSpeechSynthesisVoice] {
-        AVSpeechSynthesisVoice.speechVoices()
-            .filter { $0.language.hasPrefix(prefix) }
-            .sorted { ($0.quality.rawValue, $0.name) > ($1.quality.rawValue, $1.name) }
-    }
+    private let englishSample = "Hi, the plumber will come by tomorrow morning. Will someone be home?"
+    private let chineseSample = "你好，水管工明天上午会过来，家里会有人吗？"
 
     var body: some View {
         Form {
+            aiSection
+            Section {
+                ForEach(SystemVoice.english) { systemRow($0, selection: $englishVoice, sample: englishSample) }
+            } header: {
+                Text("英文系统音色")
+            }
+            Section {
+                ForEach(SystemVoice.chinese) { systemRow($0, selection: $chineseVoice, sample: chineseSample) }
+            } header: {
+                Text("中文系统音色")
+            } footer: {
+                Text(hint ?? "系统音色免费、离线。标“需下载”的音色要先在系统“设置 → 辅助功能 → 朗读内容 → 声音”里下载（选“高级”或“增强”版本更好听），下载后回到这里就能选。")
+            }
             Section {
                 HStack {
                     Image(systemName: "tortoise").foregroundStyle(.secondary)
                     Slider(value: $rate, in: 0.3...0.62) { editing in
-                        // 拖完读一句，听听这个语速
-                        if !editing { play("Hi, the plumber will come by tomorrow morning.", voice: nil) }
+                        if !editing { playSystem(englishSample, voice: SystemVoice.resolve(englishVoice)) }
                     }
                     Image(systemName: "hare").foregroundStyle(.secondary)
                 }
             } header: {
-                Text("语速")
+                Text("系统音色的语速")
             } footer: {
-                Text("查单词时的英、美真人发音不受影响。")
-            }
-            voiceSection("英文", prefix: "en", selection: $englishVoice,
-                         sample: "Hi, the plumber will come by tomorrow morning.")
-            voiceSection("中文", prefix: "zh", selection: $chineseVoice, sample: "你好，水管工明天上午会过来。")
-            Section {
-            } footer: {
-                Text("标着“增强”“高级”的音色更自然。没有的话，可以在系统“设置 → 辅助功能 → 朗读内容 → 声音”里免费下载，下载后回到这里就能选。")
+                Text("查单词时的英、美真人发音不受这里的设置影响。")
             }
         }
         .formStyle(.grouped)
         .navigationTitle("朗读声音")
         .inlineNavigationTitle()
-        .onDisappear { preview.stopSpeaking(at: .immediate) }
-    }
-
-    private func voiceSection(_ title: String, prefix: String, selection: Binding<String>, sample: String) -> some View {
-        Section(title) {
-            voiceRow(name: "默认", detail: prefix == "en" ? "跟随英式 / 美式口音设置" : "系统默认", id: "", selection: selection,
-                     sample: sample, voice: nil)
-            ForEach(Self.voices(prefix), id: \.identifier) { voice in
-                voiceRow(name: voice.name, detail: Self.region(voice.language), id: voice.identifier, selection: selection,
-                         sample: sample, voice: voice, quality: voice.quality)
-            }
+        .onDisappear {
+            preview.stopSpeaking(at: .immediate)
+            Speaker.shared.stop()
         }
     }
 
-    private func voiceRow(name: String, detail: String, id: String, selection: Binding<String>, sample: String,
-                          voice: AVSpeechSynthesisVoice?, quality: AVSpeechSynthesisVoiceQuality = .default) -> some View {
+    // MARK: AI 音色
+
+    private var aiSection: some View {
+        Section {
+            row(title: "不用 AI 音色", detail: "用下面的系统音色", selected: aiVoice.isEmpty, tag: nil) {
+                aiVoice = ""
+            }
+            ForEach(AIVoice.voices, id: \.id) { voice in
+                row(title: voice.id.capitalized, detail: voice.detail, selected: aiVoice == voice.id, tag: nil) {
+                    guard AIVoice.apiKey != nil else {
+                        hint = "AI 音色要先在设置的“AI 增强”里选 ChatGPT 并填写 API Key。"
+                        return
+                    }
+                    hint = nil
+                    aiVoice = voice.id
+                    Speaker.shared.playAI(.text(englishSample + " " + chineseSample, isChinese: false), voice: voice.id)
+                }
+                .opacity(AIVoice.apiKey == nil ? 0.45 : 1)
+            }
+        } header: {
+            Text("AI 音色（最像真人）")
+        } footer: {
+            Text(AIVoice.apiKey == nil
+                 ? "要先在设置的“AI 增强”里选 ChatGPT 并填写 API Key。AI 音色需要联网，按字数计费，读一句大约不到 1 分钱。"
+                 : "中英文都能读。需要联网，按字数计费，读一句大约不到 1 分钱；读过的句子会缓存，再读不收费。网络不好时自动改用系统音色。")
+        }
+    }
+
+    // MARK: 系统音色
+
+    private func systemRow(_ voice: SystemVoice, selection: Binding<String>, sample: String) -> some View {
+        let best = voice.best
+        let tag: (String, Color)? = switch best?.quality {
+        case .premium: ("高级", .green)
+        case .enhanced: ("增强", .lxAccent)
+        case .some: ("基础", .secondary)
+        case nil: ("需下载", .orange)
+        }
+        return row(title: voice.name, detail: voice.detail, selected: selection.wrappedValue == voice.id, tag: tag) {
+            guard let best else {
+                hint = "“\(voice.name)”还没有下载：打开系统“设置 → 辅助功能 → 朗读内容 → 声音”，在对应语言里找到 \(voice.name) 下载，下载后回到这里再选。"
+                return
+            }
+            hint = nil
+            selection.wrappedValue = voice.id
+            playSystem(sample, voice: best)
+        }
+    }
+
+    private func row(title: String, detail: String, selected: Bool, tag: (String, Color)?, action: @escaping () -> Void) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "checkmark")
                 .foregroundStyle(Color.lxAccent)
-                .opacity(selection.wrappedValue == id ? 1 : 0)
+                .opacity(selected ? 1 : 0)
                 .frame(width: 18)
             VStack(alignment: .leading, spacing: 1) {
-                Text(name)
+                Text(title)
                 Text(detail).font(.caption).foregroundStyle(.secondary)
             }
-            if quality == .premium {
-                tag("高级", .green)
-            } else if quality == .enhanced {
-                tag("增强", .lxAccent)
-            }
             Spacer()
-            Button {
-                play(sample, voice: voice)
-            } label: {
-                Image(systemName: "speaker.wave.2").frame(width: 36, height: 32)
+            if let tag {
+                Text(tag.0)
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(tag.1)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1)
+                    .background(tag.1.opacity(0.12), in: .rect(cornerRadius: 5))
             }
-            .buttonStyle(.borderless)
-            .accessibilityLabel("试听\(name)")
+            Image(systemName: "speaker.wave.2").foregroundStyle(Color.lxAccent)
         }
         .contentShape(.rect)
-        .onTapGesture {
-            // 选中就读一句试听
-            selection.wrappedValue = id
-            play(sample, voice: voice)
-        }
+        .onTapGesture(perform: action)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 
-    private func play(_ sample: String, voice: AVSpeechSynthesisVoice?) {
+    /// 选中系统音色就读一句试听
+    private func playSystem(_ sample: String, voice: AVSpeechSynthesisVoice?) {
+        Speaker.shared.stop()
         preview.stopSpeaking(at: .immediate)
         #if os(iOS)
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
         try? AVAudioSession.sharedInstance().setActive(true)
         #endif
         let utterance = AVSpeechUtterance(string: sample)
-        utterance.voice = voice ?? AVSpeechSynthesisVoice(language: sample.isMostlyChinese ? "zh-CN" : (Speaker.defaultAccent == 1 ? "en-GB" : "en-US"))
+        utterance.voice = voice ?? AVSpeechSynthesisVoice(language: sample.isMostlyChinese ? "zh-CN" : "en-US")
         utterance.rate = Float(rate)
         preview.speak(utterance)
-    }
-
-    private func tag(_ text: String, _ color: Color) -> some View {
-        Text(text)
-            .font(.caption2.weight(.bold))
-            .foregroundStyle(color)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 1)
-            .background(color.opacity(0.12), in: .rect(cornerRadius: 5))
-    }
-
-    private static func region(_ language: String) -> String {
-        switch language {
-        case "en-US": "美式"
-        case "en-GB": "英式"
-        case "en-AU": "澳式"
-        case "en-IE": "爱尔兰"
-        case "en-IN": "印度"
-        case "en-ZA": "南非"
-        case "zh-CN": "普通话"
-        case "zh-TW": "台湾"
-        case "zh-HK": "粤语"
-        default: language
-        }
     }
 }

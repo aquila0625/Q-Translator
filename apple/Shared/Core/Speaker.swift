@@ -22,7 +22,7 @@ struct Speech: Equatable {
 
 /// 发音：英文优先用有道真人发音（区分英/美音），拿不到或中文时用系统语音合成（离线可用）。
 @MainActor
-final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
+final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDelegate {
     static let shared = Speaker()
 
     /// 正在朗读的内容；界面据此把“朗读”按钮换成“停止”
@@ -32,6 +32,11 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     private var utterance: AVSpeechUtterance?
     private var player: AVPlayer?
     private var observers: [NSObjectProtocol] = []
+    /// AI 音色读出来的声音
+    private var aiPlayer: AVAudioPlayer?
+    private var aiTask: Task<Void, Never>?
+    /// 读过的 AI 声音缓存一下，同一句再读不用再请求（也不再花钱）
+    private var aiCache: [String: Data] = [:]
 
     /// 设置里选的默认口音：1 英音，2 美音
     nonisolated static var defaultAccent: Int {
@@ -62,15 +67,58 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
         }
         #endif
         playing = speech
-        // 短的英文用真人发音，长段落和中文用系统语音
-        if !speech.isChinese, speech.text.count <= 300 {
+        // 英文单词和短语用有道真人发音；句子用选的音色：AI 音色或系统音色
+        if !speech.isChinese, Self.isWordLike(speech.text) {
             playOnline(speech)
+        } else if let voice = AIVoice.selected, AIVoice.apiKey != nil {
+            playAI(speech, voice: voice)
         } else {
             synthesize(speech)
         }
     }
 
+    private static func isWordLike(_ text: String) -> Bool {
+        text.count <= 40 && text.split(separator: " ").count <= 4 && !text.contains(where: { ".!?,;\n".contains($0) })
+    }
+
+    /// 用某个 AI 音色读一段（设置里试听也用它）
+    func playAI(_ speech: Speech, voice: String) {
+        stop()
+        playing = speech
+        let key = voice + "|" + speech.text
+        aiTask = Task {
+            var data = aiCache[key]
+            if data == nil {
+                data = try? await AIVoice.speak(speech.text, voice: voice)
+                if let data { aiCache[key] = data }
+                if aiCache.count > 40 { aiCache.removeAll() }
+            }
+            guard !Task.isCancelled, playing == speech else { return }
+            guard let data, let player = try? AVAudioPlayer(data: data) else {
+                // 网络或 Key 有问题：改用系统音色
+                synthesize(speech)
+                return
+            }
+            player.delegate = self
+            player.play()
+            aiPlayer = player
+        }
+    }
+
+    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        Task { @MainActor in
+            if self.aiPlayer === player {
+                self.aiPlayer = nil
+                self.playing = nil
+            }
+        }
+    }
+
     func stop() {
+        aiTask?.cancel()
+        aiTask = nil
+        aiPlayer?.stop()
+        aiPlayer = nil
         player?.pause()
         player = nil
         observers.forEach(NotificationCenter.default.removeObserver)
@@ -110,7 +158,7 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
         let defaults = UserDefaults.standard
         // 设置里选了音色就用它，没选按口音用系统默认
         let chosen = defaults.string(forKey: speech.isChinese ? SettingsKey.voiceChinese : SettingsKey.voiceEnglish) ?? ""
-        utterance.voice = (chosen.isEmpty ? nil : AVSpeechSynthesisVoice(identifier: chosen))
+        utterance.voice = SystemVoice.resolve(chosen)
             ?? AVSpeechSynthesisVoice(language: speech.isChinese ? "zh-CN" : (speech.accent == 1 ? "en-GB" : "en-US"))
         if defaults.object(forKey: SettingsKey.speechRate) != nil {
             utterance.rate = Float(defaults.double(forKey: SettingsKey.speechRate))
@@ -150,7 +198,82 @@ enum SettingsKey {
     static let speechRate = "speech.rate"
     static let voiceEnglish = "speech.voice.en"
     static let voiceChinese = "speech.voice.zh"
+    /// 选的 AI 音色（OpenAI 的 voice 名字），空表示不用 AI 音色
+    static let aiVoice = "speech.aiVoice"
     /// 同声传译默认用耳机朗读译文；面对面对话朗读译文
     static let interpreterSpeak = "interpreter.speak"
     static let dialogSpeak = "dialog.speak"
+}
+
+/// 精选的系统音色：只留好听、有代表性的几个，不要带特效的
+struct SystemVoice: Identifiable {
+    let language: String
+    let name: String
+    let detail: String
+    var id: String { language + "|" + name }
+
+    static let english = [
+        SystemVoice(language: "en-US", name: "Ava", detail: "美式 · 女声"),
+        SystemVoice(language: "en-US", name: "Zoe", detail: "美式 · 女声"),
+        SystemVoice(language: "en-US", name: "Evan", detail: "美式 · 男声"),
+        SystemVoice(language: "en-GB", name: "Serena", detail: "英式 · 女声"),
+        SystemVoice(language: "en-GB", name: "Daniel", detail: "英式 · 男声"),
+    ]
+    static let chinese = [
+        SystemVoice(language: "zh-CN", name: "Lili", detail: "普通话 · 女声"),
+        SystemVoice(language: "zh-CN", name: "Tingting", detail: "普通话 · 女声"),
+        SystemVoice(language: "zh-CN", name: "Li-Mu", detail: "普通话 · 男声"),
+    ]
+
+    /// 这台设备上这个音色最好的版本（高级 > 增强 > 基础）；没有就是 nil
+    var best: AVSpeechSynthesisVoice? {
+        AVSpeechSynthesisVoice.speechVoices()
+            .filter { $0.language == language && $0.name.replacingOccurrences(of: "-", with: "").lowercased()
+                == name.replacingOccurrences(of: "-", with: "").lowercased() }
+            .max { $0.quality.rawValue < $1.quality.rawValue }
+    }
+
+    /// 设置里存的是“语言|名字”，用的时候取最好的版本；以前存的音色 ID 也认
+    static func resolve(_ stored: String) -> AVSpeechSynthesisVoice? {
+        guard !stored.isEmpty else { return nil }
+        let parts = stored.split(separator: "|").map(String.init)
+        if parts.count == 2 { return SystemVoice(language: parts[0], name: parts[1], detail: "").best }
+        return AVSpeechSynthesisVoice(identifier: stored)
+    }
+}
+
+/// AI 音色：OpenAI 的语音合成，更像真人。用 ChatGPT 的 API Key，按字数计费
+enum AIVoice {
+    static let voices: [(id: String, detail: String)] = [
+        ("nova", "明亮的女声"), ("shimmer", "柔和的女声"), ("coral", "温暖的女声"),
+        ("alloy", "中性的声音"), ("echo", "沉稳的男声"), ("onyx", "低沉的男声"),
+    ]
+
+    static var selected: String? {
+        let value = UserDefaults.standard.string(forKey: SettingsKey.aiVoice) ?? ""
+        return value.isEmpty ? nil : value
+    }
+
+    /// ChatGPT 的 Key（设置里 ChatGPT 那一项填的）
+    static var apiKey: String? {
+        let key = Keychain.get(account: "openai")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return key.isEmpty ? nil : key
+    }
+
+    static func speak(_ text: String, voice: String) async throws -> Data {
+        guard let key = apiKey else { throw URLError(.userAuthenticationRequired) }
+        var base = UserDefaults.standard.string(forKey: "ai.baseURL.openai") ?? "https://api.openai.com/v1"
+        if base.trimmingCharacters(in: .whitespaces).isEmpty { base = "https://api.openai.com/v1" }
+        while base.hasSuffix("/") { base.removeLast() }
+        var request = URLRequest(url: URL(string: base + "/audio/speech")!, timeoutInterval: 30)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "model": "gpt-4o-mini-tts", "voice": voice, "input": String(text.prefix(4000)), "response_format": "mp3",
+        ])
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+        return data
+    }
 }

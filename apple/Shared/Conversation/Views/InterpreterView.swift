@@ -8,6 +8,8 @@ struct InterpreterView: View {
     @StateObject private var translator: LiveTranslator
     @Environment(\.dismiss) private var dismiss
     @AppStorage("interpreter.sourceIsChinese") private var sourceIsChinese = false
+    /// 显示方式：0 对照，1 只看原文，2 只看译文
+    @AppStorage("interpreter.display") private var display = 0
     /// 已经保存过（点了结束）；用其他方式关掉时也要保存
     @State private var saved = false
 
@@ -32,6 +34,15 @@ struct InterpreterView: View {
     var body: some View {
         VStack(spacing: 0) {
             topBar
+            Picker("显示", selection: $display) {
+                Text("对照").tag(0)
+                Text("原文").tag(1)
+                Text("译文").tag(2)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 16)
+            .padding(.top, 10)
+            .padding(.bottom, 4)
             subtitles
             bottomBar
         }
@@ -105,16 +116,11 @@ struct InterpreterView: View {
     private var subtitles: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
+                LazyVStack(alignment: .leading, spacing: 4) {
                     // 继续录：先显示之前录过的字幕，中间用一条分隔线隔开
                     ForEach(previous) { line in
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(line.original).font(.callout).foregroundStyle(.tertiary)
-                            Text(line.translation).font(.system(size: 17, weight: .medium)).foregroundStyle(.secondary)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        subtitle(original: line.original, translation: line.translation)
+                            .opacity(0.55)
                     }
                     if !previous.isEmpty {
                         HStack {
@@ -127,35 +133,15 @@ struct InterpreterView: View {
                         .padding(.vertical, 6)
                     }
                     ForEach(interpreter.segments) { segment in
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(segment.original)
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                            if let translation = segment.translation {
-                                Text(translation)
-                                    .font(.system(size: 19, weight: .semibold))
-                            } else {
-                                ProgressView().controlSize(.small)
-                            }
-                        }
-                        .textSelection(.enabled)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .id(segment.id)
+                        subtitle(original: segment.original, translation: segment.translation)
+                            .id(segment.id)
                     }
                     if !interpreter.live.isEmpty {
                         // 还没说完的那句：原文和边说边翻的译文一起往下长
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(interpreter.live + "…")
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                            if !interpreter.liveTranslation.isEmpty {
-                                Text(interpreter.liveTranslation + "…")
-                                    .font(.system(size: 19, weight: .semibold))
-                            }
-                        }
-                        .padding(12)
+                        subtitle(original: interpreter.live + "…",
+                                 translation: interpreter.liveTranslation.isEmpty ? (display == 2 ? "…" : nil) : interpreter.liveTranslation + "…",
+                                 pending: false)
+                        .padding(.vertical, 4)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Color.lxAccentSoft, in: .rect(cornerRadius: 14))
                         .animation(.snappy, value: interpreter.liveTranslation)
@@ -197,6 +183,32 @@ struct InterpreterView: View {
                 }
             }
         }
+    }
+
+    /// 一条字幕：按显示方式只显示原文、只显示译文，或者对照（原文小字在上、译文在下）
+    @ViewBuilder
+    private func subtitle(original: String, translation: String?, pending: Bool = true) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if display != 2 {
+                Text(original)
+                    .font(display == 1 ? .system(size: 17) : .system(size: 14))
+                    .foregroundStyle(display == 1 ? .primary : .secondary)
+                    .lineSpacing(2)
+            }
+            if display != 1 {
+                if let translation {
+                    Text(translation)
+                        .font(.system(size: 16))
+                        .lineSpacing(3)
+                } else if pending {
+                    ProgressView().controlSize(.mini)
+                }
+            }
+        }
+        .textSelection(.enabled)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: 底栏
