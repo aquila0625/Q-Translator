@@ -268,7 +268,13 @@ struct ConversationView: View {
         .fullScreenCover(isPresented: $controller.showInterpreter) {
             InterpreterView(controller: controller)
         }
+        .fullScreenCover(isPresented: $controller.showPractice) {
+            PracticeView(controller: controller)
+        }
         #else
+        .sheet(isPresented: $controller.showPractice) {
+            PracticeView(controller: controller)
+        }
         .sheet(isPresented: $controller.showInterpreter) {
             InterpreterView(controller: controller)
         }
@@ -412,6 +418,7 @@ private func deleteTitle(_ turn: Turn) -> String {
     case .sentence: "删除这句话和它的译文？"
     case .dialog: "删除这段面对面对话（\(turn.dialog?.count ?? 0) 句）？"
     case .transcript: "删除这段同声传译记录（\(turn.transcript?.count ?? 0) 句）？"
+    case .practice: "删除这次场景练习（\(turn.practice?.lines.count ?? 0) 句）？"
     }
 }
 
@@ -536,7 +543,7 @@ struct OutlineList: View {
     }
 
     private func meta(_ turn: Turn) -> String {
-        let kind = turn.transcript != nil ? "传译" : turn.dialog != nil ? "对话" : turn.isImage ? "图片" : (turn.word != nil ? "单词" : (turn.sourceIsChinese ? "中文" : "英文"))
+        let kind = turn.practice != nil ? "练习" : turn.transcript != nil ? "传译" : turn.dialog != nil ? "对话" : turn.isImage ? "图片" : (turn.word != nil ? "单词" : (turn.sourceIsChinese ? "中文" : "英文"))
         return kind + " · " + turn.createdAt.formatted(date: .omitted, time: .shortened)
     }
 }

@@ -38,7 +38,7 @@ struct CollinsSense: Identifiable, Codable {
     let examples: [ExamplePair]
 }
 
-struct Phrase: Identifiable, Codable {
+struct Phrase: Identifiable, Codable, Equatable {
     var id = UUID()
     let key: String
     let value: String

@@ -88,6 +88,9 @@ struct ComposerView: View {
                     Divider()
                     Button("面对面对话", systemImage: "person.2") { controller.showFaceToFace = true }
                     Button("同声传译", systemImage: "captions.bubble") { controller.startInterpretation() }
+                    Button("英语场景练习", systemImage: "theatermasks") {
+                        if AISettings.shared.isConfigured { controller.startPractice() } else { onNeedAI() }
+                    }
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 18, weight: .medium))

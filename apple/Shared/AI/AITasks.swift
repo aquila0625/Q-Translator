@@ -80,6 +80,87 @@ enum AITasks {
         return (texts, response.usage)
     }
 
+    // MARK: 场景练习
+
+    struct PracticeReply {
+        /// 用户上一句更地道的说法和原因（中文）；说得好就是 nil
+        var better: String?
+        var reason: String?
+        /// AI 扮演的角色接着说的话和中文意思
+        var reply: String
+        var chinese: String
+        var phrases: [Phrase]
+        /// 自己描述的场景：AI 选的角色（中文，例如“咖啡师”）
+        var role: String?
+        var usage: AIUsage?
+    }
+
+    static let practiceLevels = ["初级", "中级", "高级"]
+
+    /// 场景练习的一轮：先看用户刚说的那句，给出更地道的说法（不打断对话），再以角色身份接着说。
+    /// lines 为空时由 AI 开场。
+    static func practiceTurn(scenario: String, role: String, level: Int, lines: [PracticeLine],
+                             config: AIClient.Config) async throws -> PracticeReply {
+        let levelRule = switch level {
+        case 0: "The learner is a beginner: use short sentences and everyday words, and speak slowly and clearly."
+        case 2: "The learner is advanced: speak naturally as a native speaker would, with idioms and a normal pace."
+        default: "The learner is intermediate: use natural everyday English, but avoid rare words and long sentences."
+        }
+        let roleRule = role.isEmpty
+            ? "Choose the most fitting role for yourself in this scenario, and give its name in Simplified Chinese (2–4 characters) in the `role` field."
+            : "You play the \(role) (this is the role's name in Chinese). Set `role` to null."
+        let system = """
+        You are a role-play partner in an English speaking practice app for Chinese speakers. The learner practices \
+        a real-life scenario with you: you play one side and the learner plays the other, speaking English. Their \
+        messages usually come from speech recognition, so ignore capitalization, punctuation and obvious recognition slips.
+
+        Scenario (described in Chinese): \(scenario)
+        \(roleRule)
+        \(levelRule)
+
+        Each time, do the following.
+        1. Look at the learner's latest message. If it has grammar mistakes or wording a native speaker would not use, \
+        or if it is partly or fully in Chinese because they did not know how to say it, put a natural English version of \
+        the whole message in `better`, and explain the key point in one short Simplified Chinese sentence in `reason`. \
+        If the message is already natural, set both to null. Do not rewrite messages that are fine just to sound fancier.
+        2. Reply in character with 1 to 3 short spoken sentences that keep the conversation going; usually end with a \
+        question or something the learner can respond to. Never step out of the role in the reply to teach or correct: \
+        the app shows the correction separately.
+        3. Put a faithful Simplified Chinese translation of your reply in `chinese`.
+        4. In `phrases`, list up to 2 expressions from your reply or from `better` that are worth learning for this \
+        scenario, each as {"en": "...", "zh": "..."} with a short Chinese meaning. Use an empty list when nothing stands out.
+
+        If there are no messages yet, open the conversation in character with a natural first line, and set `better` \
+        and `reason` to null.
+
+        Answer with only one JSON object and nothing else, because the app parses it:
+        {"better": string or null, "reason": string or null, "reply": string, "chinese": string, \
+        "phrases": [{"en": string, "zh": string}], "role": string or null}
+        """
+        let speaker = role.isEmpty ? "Partner" : "Partner (\(role))"
+        let history = lines.map { ($0.isMine ? "Learner" : speaker) + ": " + $0.text }.joined(separator: "\n")
+        let user = lines.isEmpty
+            ? "There are no messages yet. Open the conversation."
+            : "<conversation>\n\(history)\n</conversation>\nRespond to the learner's latest message."
+        let response = try await AIClient.complete(system: system, user: user, config: config)
+        guard let start = response.text.firstIndex(of: "{"), let end = response.text.lastIndex(of: "}"),
+              let data = String(response.text[start...end]).data(using: .utf8),
+              let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let reply = (json["reply"] as? String)?.trimmed, !reply.isEmpty else {
+            throw AIError(message: "AI 返回的格式不对，可以重试。")
+        }
+        func text(_ key: String) -> String? {
+            let value = (json[key] as? String)?.trimmed ?? ""
+            return value.isEmpty ? nil : value
+        }
+        let phrases = (json["phrases"] as? [[String: Any]] ?? []).compactMap { item -> Phrase? in
+            guard let en = (item["en"] as? String)?.trimmed, !en.isEmpty else { return nil }
+            return Phrase(key: en, value: (item["zh"] as? String)?.trimmed ?? "")
+        }
+        return PracticeReply(better: text("better"), reason: text("reason"), reply: reply, chinese: text("chinese") ?? "",
+                             phrases: Array(phrases.prefix(2)), role: text("role"), usage: response.usage)
+    }
+
     // MARK: 写回复
 
     private static let separator = "===ZH==="

@@ -23,6 +23,9 @@ extension Color {
     /// 同声传译记录的卡片（浅琥珀色）
     static let lxTranscriptCard = Color(light: 0xFFF6E3, dark: 0x2A2210)
     static let lxTranscriptInk = Color(light: 0x8A5A00, dark: 0xF2C14E)
+    /// 场景练习记录的卡片（浅玫瑰色）
+    static let lxPracticeCard = Color(light: 0xFDEFF3, dark: 0x2A1620)
+    static let lxPracticeInk = Color(light: 0xB0305C, dark: 0xF59AB8)
 
     init(light: UInt32, dark: UInt32) {
         #if os(macOS)

@@ -122,6 +122,38 @@ final class ConversationController: ObservableObject {
         autoTitle(currentID, from: "面对面对话")
     }
 
+    // MARK: 场景练习
+
+    @Published var showPractice = false
+    /// “再练一次”时沿用的场景；nil 表示先选场景
+    @Published private(set) var practiceSeed: PracticeRecord?
+
+    func startPractice(again record: PracticeRecord? = nil) {
+        practiceSeed = record.map { PracticeRecord(scenario: $0.scenario, role: $0.role, level: $0.level) }
+        showPractice = true
+    }
+
+    /// 练习过程中每一轮都存一下：第一次新建一轮，之后更新同一轮。返回这一轮的 ID
+    @discardableResult
+    func savePractice(_ record: PracticeRecord, into turnID: UUID?) -> UUID? {
+        guard record.lines.contains(where: \.isMine) else { return turnID }
+        let source = record.lines.map(\.text).joined(separator: "\n")
+        if let turnID, store.turn(currentID, turnID) != nil {
+            store.updateTurn(currentID, turnID) {
+                $0.practice = record
+                $0.source = source
+            }
+            store.updateSession(currentID) { $0.updatedAt = Date() }
+            return turnID
+        }
+        var turn = Turn(source: source, sourceIsChinese: false)
+        turn.practice = record
+        turn.state = .done
+        store.appendTurn(turn, to: currentID)
+        autoTitle(currentID, from: "场景练习")
+        return turn.id
+    }
+
     // MARK: 同声传译
 
     @Published var showInterpreter = false

@@ -60,6 +60,31 @@ struct DialogLine: Codable, Identifiable, Equatable {
     var createdAt = Date()
 }
 
+/// 场景练习里的一句：AI 扮演的角色说的，或者我说的（带 AI 给的更地道说法）
+struct PracticeLine: Codable, Identifiable, Equatable {
+    var id = UUID()
+    var isMine: Bool
+    var text: String
+    /// 中文意思（AI 说的话才有）
+    var chinese: String?
+    /// 我说的话：更地道的说法和原因；说得好就没有
+    var better: String?
+    var reason: String?
+}
+
+/// 一次场景练习
+struct PracticeRecord: Codable, Equatable {
+    /// 场景，例如“租房：你是租客，AI 是房东”
+    var scenario: String
+    /// AI 扮演的角色，例如“房东”
+    var role: String
+    /// 难度：0 初级，1 中级，2 高级
+    var level: Int
+    var lines: [PracticeLine] = []
+    /// 练习里学到的新说法（英文 + 中文）
+    var phrases: [Phrase] = []
+}
+
 /// 同声传译记录里的一句
 struct TranscriptLine: Codable, Identifiable, Equatable {
     var id = UUID()
@@ -90,6 +115,8 @@ struct Turn: Codable, Identifiable {
     var audioDuration: Double?
     /// 面对面对话：整段对话作为一轮保存
     var dialog: [DialogLine]?
+    /// 场景练习：整段练习作为一轮保存
+    var practice: PracticeRecord?
     /// 同声传译：整段字幕作为一轮保存，以及收音时长（秒）
     var transcript: [TranscriptLine]?
     var transcriptDuration: Double?
@@ -100,6 +127,7 @@ struct Turn: Codable, Identifiable {
     var outlineText: String {
         if let dialog { return "面对面对话 · \(dialog.count) 句：" + (dialog.first?.original ?? "") }
         if let transcript { return "同声传译 · \(transcript.count) 句：" + (transcript.first?.original ?? "") }
+        if let practice { return "场景练习 · \(practice.role)：" + (practice.lines.first?.text ?? "") }
         if isImage {
             let parts = images.map { String($0.recognized.prefix(24)) }.filter { !$0.isEmpty }
             return "\(images.count) 张图片" + (parts.isEmpty ? "" : "：" + parts.joined(separator: " / "))
@@ -113,6 +141,7 @@ struct Turn: Codable, Identifiable {
             + images.map { $0.recognized + "\n" + $0.translation }.joined(separator: "\n")
             + (dialog ?? []).map { $0.original + "\n" + $0.translation }.joined(separator: "\n")
             + (transcript ?? []).map { $0.original + "\n" + $0.translation }.joined(separator: "\n")
+            + (practice?.lines ?? []).map { $0.text + "\n" + ($0.chinese ?? "") + ($0.better ?? "") }.joined(separator: "\n")
     }
 }
 
