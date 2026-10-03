@@ -26,7 +26,6 @@ struct SettingsView: View {
                         Text("浅色").tag(1)
                         Text("深色").tag(2)
                     }
-                    .pickerStyle(.segmented)
                 }
 
                 Section {
@@ -122,12 +121,13 @@ struct SettingsView: View {
                 }
 
                 Section("朗读") {
+                    SpeechSpeedPicker()
                     Picker("默认英文口音", selection: $accent) {
                         Text("英式").tag(1)
                         Text("美式").tag(2)
                     }
                     Toggle("查词后自动朗读", isOn: $autoSpeak)
-                    NavigationLink("音色和语速") { SpeechVoicesView() }
+                    NavigationLink("音色") { SpeechVoicesView() }
                 }
 
                 Section {
@@ -148,6 +148,7 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
             .navigationTitle("设置")
+            .inlineNavigationTitle()
             #if os(macOS)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

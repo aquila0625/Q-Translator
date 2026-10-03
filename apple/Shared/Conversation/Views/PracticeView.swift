@@ -5,10 +5,16 @@ import SwiftUI
 struct PracticeView: View {
     @ObservedObject var controller: ConversationController
     @ObservedObject private var voice = VoiceInput.shared
+    @ObservedObject private var speaker = Speaker.shared
     @Environment(\.dismiss) private var dismiss
     @AppStorage("practice.level") private var level = 1
     /// 自动朗读 AI 说的话
     @AppStorage("practice.speak") private var speak = true
+    /// 语音聊天：像语音通话一样，对方说完自动开始听，我说完停一下自动发送
+    @AppStorage("practice.handsFree") private var handsFree = false
+    /// 一键显示所有中文意思
+    @AppStorage("practice.showChinese") private var showChinese = false
+    @AppStorage(SettingsKey.playbackSpeed) private var speed = 1.0
 
     @State private var record: PracticeRecord?
     @State private var custom = ""
@@ -183,10 +189,26 @@ struct PracticeView: View {
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity)
-                GlassIconButton(systemName: speak ? "speaker.wave.2.fill" : "speaker.slash", label: speak ? "关闭自动朗读" : "自动朗读") {
-                    speak.toggle()
-                    if !speak { Speaker.shared.stop() }
+                GlassIconButton(systemName: showChinese ? "character.bubble.fill" : "character.bubble",
+                                label: showChinese ? "隐藏中文意思" : "显示中文意思",
+                                tint: showChinese ? .lxPracticeInk : .primary) {
+                    showChinese.toggle()
+                    revealed = []
                 }
+                Menu {
+                    Toggle("自动朗读对方的话", systemImage: "speaker.wave.2", isOn: $speak)
+                    SpeechSpeedPicker()
+                        .pickerStyle(.inline)
+                } label: {
+                    Image(systemName: speak ? "speaker.wave.2.fill" : "speaker.slash")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(Color.primary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(.circle)
+                }
+                .buttonStyle(.plain)
+                .glassEffect(.regular.interactive(), in: .circle)
+                .accessibilityLabel("朗读和语速")
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
@@ -224,6 +246,31 @@ struct PracticeView: View {
                 .onChange(of: record.lines.count) { withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
                 .onChange(of: thinking) { withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
             }
+            .onChange(of: speak) { if !speak { Speaker.shared.stop() } }
+            // 语音聊天：轮到我说时自动开始听
+            .onChange(of: shouldListen, initial: true) { _, listen in
+                guard listen else { return }
+                Task {
+                    try? await Task.sleep(for: .milliseconds(350))
+                    if shouldListen { await voice.start(preferred: .english) }
+                }
+            }
+            // 语音聊天：说完停顿一会儿自动发送
+            .task(id: handsFree && voice.isListening) {
+                guard handsFree, voice.isListening else { return }
+                var last = voice.text
+                var since = Date()
+                while !Task.isCancelled, voice.isListening {
+                    try? await Task.sleep(for: .milliseconds(250))
+                    if voice.text != last {
+                        last = voice.text
+                        since = Date()
+                    } else if !last.isEmpty, Date().timeIntervalSince(since) > 1.6 {
+                        finishVoice()
+                        break
+                    }
+                }
+            }
 
             composer
         }
@@ -236,7 +283,7 @@ struct PracticeView: View {
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(line.text).font(.system(size: 17))
-                    if revealed.contains(line.id), let chinese = line.chinese, !chinese.isEmpty {
+                    if showChinese != revealed.contains(line.id), let chinese = line.chinese, !chinese.isEmpty {
                         Text(chinese).font(.subheadline).foregroundStyle(.secondary)
                     }
                 }
@@ -247,7 +294,7 @@ struct PracticeView: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .accessibilityHint(revealed.contains(line.id) ? "收起中文意思" : "显示中文意思")
+            .accessibilityHint(showChinese != revealed.contains(line.id) ? "收起中文意思" : "显示中文意思")
             let speech = Speech.english(line.text)
             Button { Speaker.shared.toggle(speech) } label: {
                 Image(systemName: Speaker.shared.playing == speech ? "stop.fill" : "speaker.wave.2")
@@ -279,10 +326,20 @@ struct PracticeView: View {
         .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
+    /// 语音聊天时，现在是不是该轮到我说
+    private var shouldListen: Bool {
+        guard handsFree, let record, !showSummary, !thinking, error == nil, speaker.playing == nil, !voice.isListening,
+              let last = record.lines.last, !last.isMine else { return false }
+        if case .failed = voice.state { return false }
+        return true
+    }
+
     private var composer: some View {
         VStack(spacing: 8) {
             VoiceErrorBanner()
-            if voice.isListening {
+            if handsFree {
+                handsFreePanel
+            } else if voice.isListening {
                 HStack(spacing: 10) {
                     Button { voice.cancel() } label: {
                         Image(systemName: "xmark").font(.system(size: 15, weight: .semibold))
@@ -310,7 +367,21 @@ struct PracticeView: View {
                 }
             } else {
                 HStack(alignment: .bottom, spacing: 8) {
-                    TextField("用英语回答，不会说的可以先打中文", text: $input, axis: .vertical)
+                    Button {
+                        focused = false
+                        handsFree = true
+                    } label: {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(Color.lxPracticeInk)
+                            .frame(width: 40, height: 40)
+                            .background(Color.lxPracticeCard, in: .circle)
+                            .frame(minWidth: 44, minHeight: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("切换到语音聊天")
+                    .accessibilityHint("对方说完自动开始听，你说完停一下自动发送")
+                    TextField("用英语回答，也可以打中文", text: $input, axis: .vertical)
                         .lineLimit(1...4)
                         .focused($focused)
                         #if os(iOS)
@@ -346,6 +417,68 @@ struct PracticeView: View {
         .padding(.horizontal, 12)
         .padding(.bottom, 8)
         .frame(maxWidth: 680)
+    }
+
+    /// 语音聊天：不用点发送，显示现在轮到谁
+    private var handsFreePanel: some View {
+        HStack(spacing: 12) {
+            Button {
+                handsFree = false
+                if voice.isListening { voice.cancel() }
+            } label: {
+                Image(systemName: "keyboard")
+                    .font(.system(size: 16, weight: .medium))
+                    .frame(width: 40, height: 40)
+                    .background(Color.secondary.opacity(0.15), in: .circle)
+                    .frame(minWidth: 44, minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("换回打字")
+
+            VStack(alignment: .leading, spacing: 4) {
+                if voice.isListening {
+                    HStack(spacing: 8) {
+                        Text("轮到你说了").font(.footnote.weight(.semibold)).foregroundStyle(Color.lxPracticeInk)
+                        VoiceWave(levels: Array(voice.levels.suffix(12)))
+                    }
+                    Text(voice.text.isEmpty ? "说英语，说完停一下会自动发送" : voice.text)
+                        .font(.subheadline)
+                        .foregroundStyle(voice.text.isEmpty ? .tertiary : .primary)
+                        .lineLimit(3)
+                } else if thinking {
+                    Text("对方在想…").font(.subheadline).foregroundStyle(.secondary)
+                } else if speaker.playing != nil {
+                    Text("对方正在说…").font(.subheadline).foregroundStyle(.secondary)
+                } else if case .failed = voice.state {
+                    Text("没法开始听，换回打字试试").font(.subheadline).foregroundStyle(Color.lxAI)
+                } else {
+                    Text("语音聊天").font(.subheadline).foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+
+            if voice.isListening {
+                Button(action: finishVoice) {
+                    Image(systemName: "arrow.up").font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(Color.lxOnAccent)
+                        .frame(width: 40, height: 40)
+                        .background(voice.text.isEmpty ? Color.secondary.opacity(0.4) : Color.lxAccent, in: .circle)
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+                .buttonStyle(.plain)
+                .disabled(voice.text.isEmpty)
+                .accessibilityLabel("现在发送")
+            } else if speaker.playing != nil {
+                Button { Speaker.shared.stop() } label: {
+                    Image(systemName: "forward.end.fill").font(.system(size: 15, weight: .semibold))
+                        .frame(width: 40, height: 40)
+                        .background(Color.secondary.opacity(0.15), in: .circle)
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("跳过，直接轮到我说")
+            }
+        }
     }
 
     // MARK: 发送和 AI 回复

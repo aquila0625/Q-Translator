@@ -38,6 +38,24 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate, AV
     /// 读过的 AI 声音缓存一下，同一句再读不用再请求（也不再花钱）
     private var aiCache: [String: Data] = [:]
 
+    /// 全局朗读速度（倍数，1 是正常速度）：系统音色、AI 音色和有道真人发音都按这个速度
+    nonisolated static var speed: Double {
+        let value = UserDefaults.standard.double(forKey: SettingsKey.playbackSpeed)
+        return value > 0 ? value : 1
+    }
+
+    static let speeds: [Double] = [0.6, 0.75, 0.9, 1, 1.1, 1.25, 1.5]
+
+    static func speedLabel(_ speed: Double) -> String {
+        speed == 1 ? "正常" : String(format: "%g×", speed)
+    }
+
+    /// 倍数换算成系统语音合成的 rate（默认 0.5；它不是线性的，按听感压缩一下）
+    nonisolated static var systemRate: Float {
+        let rate = Float(AVSpeechUtteranceDefaultSpeechRate) + Float(speed - 1) * 0.3
+        return min(max(rate, AVSpeechUtteranceMinimumSpeechRate), AVSpeechUtteranceMaximumSpeechRate)
+    }
+
     /// 设置里选的默认口音：1 英音，2 美音
     nonisolated static var defaultAccent: Int {
         UserDefaults.standard.integer(forKey: SettingsKey.accent) == 1 ? 1 : 2
@@ -100,6 +118,8 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate, AV
                 return
             }
             player.delegate = self
+            player.enableRate = true
+            player.rate = Float(Self.speed)
             player.play()
             aiPlayer = player
         }
@@ -133,6 +153,7 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate, AV
         comps.queryItems = [URLQueryItem(name: "audio", value: speech.text),
                             URLQueryItem(name: "type", value: String(speech.accent))]
         let item = AVPlayerItem(url: comps.url!)
+        item.audioTimePitchAlgorithm = .spectral
         let center = NotificationCenter.default
         observers = [
             center.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
@@ -150,6 +171,7 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate, AV
             },
         ]
         player = AVPlayer(playerItem: item)
+        player?.defaultRate = Float(Self.speed)
         player?.play()
     }
 
@@ -160,9 +182,7 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate, AV
         let chosen = defaults.string(forKey: speech.isChinese ? SettingsKey.voiceChinese : SettingsKey.voiceEnglish) ?? ""
         utterance.voice = SystemVoice.resolve(chosen)
             ?? AVSpeechSynthesisVoice(language: speech.isChinese ? "zh-CN" : (speech.accent == 1 ? "en-GB" : "en-US"))
-        if defaults.object(forKey: SettingsKey.speechRate) != nil {
-            utterance.rate = Float(defaults.double(forKey: SettingsKey.speechRate))
-        }
+        utterance.rate = Self.systemRate
         self.utterance = utterance
         synthesizer.speak(utterance)
     }
@@ -194,8 +214,9 @@ enum SettingsKey {
     static let voiceAutoSend = "voice.autoSend"
     /// 外观：0 跟随系统，1 浅色，2 深色
     static let appearance = "ui.appearance"
-    /// 朗读语速（AVSpeechUtterance 的 rate，默认 0.5）和选的音色（空表示默认）
-    static let speechRate = "speech.rate"
+    /// 全局朗读速度（倍数，默认 1）
+    static let playbackSpeed = "speech.speed"
+    /// 选的音色（空表示默认）
     static let voiceEnglish = "speech.voice.en"
     static let voiceChinese = "speech.voice.zh"
     /// 选的 AI 音色（OpenAI 的 voice 名字），空表示不用 AI 音色
@@ -231,6 +252,15 @@ struct SystemVoice: Identifiable {
             .filter { $0.language == language && $0.name.replacingOccurrences(of: "-", with: "").lowercased()
                 == name.replacingOccurrences(of: "-", with: "").lowercased() }
             .max { $0.quality.rawValue < $1.quality.rawValue }
+    }
+
+    /// 系统里下载朗读声音的页面
+    static var settingsURL: URL? {
+        #if os(iOS)
+        URL(string: "App-prefs:ACCESSIBILITY&path=SPEECH_TITLE")
+        #else
+        URL(string: "x-apple.systempreferences:com.apple.Accessibility-Settings.extension?SpokenContent")
+        #endif
     }
 
     /// 设置里存的是“语言|名字”，用的时候取最好的版本；以前存的音色 ID 也认

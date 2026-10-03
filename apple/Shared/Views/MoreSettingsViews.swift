@@ -189,16 +189,23 @@ struct SpeechVoicesView: View {
     @AppStorage(SettingsKey.voiceEnglish) private var englishVoice = ""
     @AppStorage(SettingsKey.voiceChinese) private var chineseVoice = ""
     @AppStorage(SettingsKey.aiVoice) private var aiVoice = ""
-    @AppStorage(SettingsKey.speechRate) private var rate = 0.5
+    @AppStorage(SettingsKey.playbackSpeed) private var speed = 1.0
+    @Environment(\.openURL) private var openURL
     @ObservedObject private var speaker = Speaker.shared
     @State private var preview = AVSpeechSynthesizer()
     @State private var hint: String?
 
-    private let englishSample = "Hi, the plumber will come by tomorrow morning. Will someone be home?"
-    private let chineseSample = "你好，水管工明天上午会过来，家里会有人吗？"
+    private let englishSample = "Hi, nice to meet you. How are you doing today?"
+    private let chineseSample = "你好，很高兴认识你，今天过得怎么样？"
 
     var body: some View {
         Form {
+            Section {
+                SpeechSpeedPicker()
+                    .onChange(of: speed) { playCurrent() }
+            } footer: {
+                Text("所有朗读都按这个速度：AI 音色、系统音色和查单词时的真人发音。")
+            }
             aiSection
             Section {
                 ForEach(SystemVoice.english) { systemRow($0, selection: $englishVoice, sample: englishSample) }
@@ -210,20 +217,20 @@ struct SpeechVoicesView: View {
             } header: {
                 Text("中文系统音色")
             } footer: {
-                Text(hint ?? "系统音色免费、离线。标“需下载”的音色要先在系统“设置 → 辅助功能 → 朗读内容 → 声音”里下载（选“高级”或“增强”版本更好听），下载后回到这里就能选。")
+                Text(hint ?? "系统音色免费、离线。标“需下载”的音色要先到系统的朗读声音设置里下载（选“高级”或“增强”版本更好听），下载后回到这里就能选。")
             }
             Section {
-                HStack {
-                    Image(systemName: "tortoise").foregroundStyle(.secondary)
-                    Slider(value: $rate, in: 0.3...0.62) { editing in
-                        if !editing { playSystem(englishSample, voice: SystemVoice.resolve(englishVoice)) }
-                    }
-                    Image(systemName: "hare").foregroundStyle(.secondary)
+                Button {
+                    if let url = SystemVoice.settingsURL { openURL(url) }
+                } label: {
+                    Label("去系统设置下载更多音色", systemImage: "arrow.up.forward.app")
                 }
-            } header: {
-                Text("系统音色的语速")
             } footer: {
-                Text("查单词时的英、美真人发音不受这里的设置影响。")
+                #if os(iOS)
+                Text("打开系统设置后，依次点“辅助功能 → 朗读内容 → 声音”，选语言后下载音色。")
+                #else
+                Text("在“辅助功能 → 朗读内容”里点“系统声音”旁边的 ⓘ，选“管理声音”下载。")
+                #endif
             }
         }
         .formStyle(.grouped)
@@ -320,7 +327,29 @@ struct SpeechVoicesView: View {
         #endif
         let utterance = AVSpeechUtterance(string: sample)
         utterance.voice = voice ?? AVSpeechSynthesisVoice(language: sample.isMostlyChinese ? "zh-CN" : "en-US")
-        utterance.rate = Float(rate)
+        utterance.rate = Speaker.systemRate
         preview.speak(utterance)
+    }
+
+    /// 改了语速：用现在选的音色读一句听听效果
+    private func playCurrent() {
+        if let voice = AIVoice.selected, AIVoice.apiKey != nil {
+            Speaker.shared.playAI(.english(englishSample), voice: voice)
+        } else {
+            playSystem(englishSample, voice: SystemVoice.resolve(englishVoice))
+        }
+    }
+}
+
+/// 全局朗读速度：设置页和场景练习里都能调
+struct SpeechSpeedPicker: View {
+    @AppStorage(SettingsKey.playbackSpeed) private var speed = 1.0
+
+    var body: some View {
+        Picker(selection: $speed) {
+            ForEach(Speaker.speeds, id: \.self) { Text(Speaker.speedLabel($0)).tag($0) }
+        } label: {
+            Text("朗读速度")
+        }
     }
 }
