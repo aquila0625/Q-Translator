@@ -24,6 +24,7 @@ struct PhoneRootView: View {
     @State private var drawerOpen = false
     @State private var dragOffset: CGFloat = 0
     @State private var sheet: RootSheet?
+    @ObservedObject private var router = ModuleRouter.shared
 
     var body: some View {
         GeometryReader { geometry in
@@ -64,6 +65,16 @@ struct PhoneRootView: View {
             await controller.translator.run(session)
         }
         .sheet(item: $sheet) { RootSheetContent(sheet: $0, controller: controller) }
+        // 三个模块：全屏盖在翻译上，左上角返回
+        .fullScreenCover(item: $router.module) { ModulePage(module: $0, controller: controller) }
+        .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in sheet = .settings }
+        // 主屏快捷操作“新建翻译”
+        .onChange(of: router.newSessionRequested) { _, requested in
+            guard requested else { return }
+            router.newSessionRequested = false
+            setDrawer(false)
+            controller.newSession()
+        }
     }
 
     private func setDrawer(_ open: Bool) {

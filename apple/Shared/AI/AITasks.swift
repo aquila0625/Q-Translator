@@ -80,6 +80,24 @@ enum AITasks {
         return (texts, response.usage)
     }
 
+    // MARK: 同声传译要点
+
+    /// 把一段讲座或会议的字幕整理成中文要点
+    static func summarizeTranscript(_ lines: [TranscriptLine], config: AIClient.Config) async throws -> AIResponse {
+        let system = """
+        You summarize the transcript of a lecture or meeting for a Chinese-speaking user. The transcript comes from live \
+        speech recognition, so ignore small recognition slips. Lines are in the original language; translations may follow.
+
+        Write 5 to 8 key points in Simplified Chinese, one per line, each starting with "• ". Keep every point short and \
+        concrete (names, numbers, deadlines and decisions matter most). End with one line starting with "待办：" listing \
+        action items or deadlines mentioned, or leave that line out if there are none. Output only the points: the app \
+        shows your answer to the user directly.
+        """
+        var text = lines.map { $0.original }.joined(separator: "\n")
+        if text.count > 40000 { text = String(text.prefix(40000)) }
+        return try await AIClient.complete(system: system, user: "<transcript>\n\(text)\n</transcript>", config: config)
+    }
+
     // MARK: 场景练习
 
     struct PracticeReply {

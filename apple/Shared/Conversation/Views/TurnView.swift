@@ -2,16 +2,13 @@ import SwiftUI
 
 /// 内容的种类，用来筛选，也决定每一轮长什么样
 enum TurnKind: CaseIterable {
-    case word, sentence, image, dialog, transcript, practice
+    case word, sentence, image
 
     var title: String {
         switch self {
         case .word: "单词"
         case .sentence: "句子"
         case .image: "图片"
-        case .dialog: "对话"
-        case .transcript: "传译"
-        case .practice: "练习"
         }
     }
 }
@@ -23,9 +20,6 @@ extension TurnKind {
         case .word: .lxSurface
         case .sentence: .lxSentenceCard
         case .image: .lxImageCard
-        case .dialog: .lxDialogCard
-        case .transcript: .lxTranscriptCard
-        case .practice: .lxPracticeCard
         }
     }
 
@@ -34,18 +28,12 @@ extension TurnKind {
         case .word: .lxAccent
         case .sentence: .lxSentenceInk
         case .image: .lxImageInk
-        case .dialog: .lxDialogInk
-        case .transcript: .lxTranscriptInk
-        case .practice: .lxPracticeInk
         }
     }
 }
 
 extension Turn {
     var kind: TurnKind {
-        if practice != nil { return .practice }
-        if transcript != nil { return .transcript }
-        if dialog != nil { return .dialog }
         if isImage { return .image }
         if word != nil { return .word }
         return .sentence
@@ -83,37 +71,7 @@ struct TurnView: View {
     private var editing: Bool { editingTurn == turn.id }
 
     var body: some View {
-        if let practice = turn.practice {
-            PracticeCard(record: practice, date: turn.createdAt, expanded: expanded, onToggleExpand: onToggleExpand,
-                         onAgain: { controller.startPractice(again: practice) })
-                .contentShape(.rect)
-                .onTapGesture(perform: onSelect)
-                #if os(macOS)
-                .contextMenu {
-                    Button("删除这一轮", systemImage: "trash", role: .destructive) { onDelete() }
-                }
-                #endif
-        } else if let transcript = turn.transcript {
-            TranscriptCard(lines: transcript, duration: turn.transcriptDuration, sourceIsChinese: turn.sourceIsChinese,
-                           date: turn.createdAt, expanded: expanded, onToggleExpand: onToggleExpand,
-                           onContinue: { controller.continueInterpretation(turn.id) })
-                .contentShape(.rect)
-                .onTapGesture(perform: onSelect)
-                #if os(macOS)
-                .contextMenu {
-                    Button("删除这一轮", systemImage: "trash", role: .destructive) { onDelete() }
-                }
-                #endif
-        } else if let dialog = turn.dialog {
-            DialogCard(lines: dialog, date: turn.createdAt)
-                .contentShape(.rect)
-                .onTapGesture(perform: onSelect)
-                #if os(macOS)
-                .contextMenu {
-                    Button("删除这一轮", systemImage: "trash", role: .destructive) { onDelete() }
-                }
-                #endif
-        } else if turn.isImage || turn.word != nil {
+        if turn.isImage || turn.word != nil {
             VStack(alignment: .leading, spacing: 6) {
                 // 单词直接显示成词卡，不再重复一个原文气泡
                 if turn.isImage { imageSource }

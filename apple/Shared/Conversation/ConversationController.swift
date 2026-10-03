@@ -30,6 +30,7 @@ final class ConversationController: ObservableObject {
     }
 
     init() {
+        ModuleStore.shared.migrate(from: store)
         if let latest = store.sessions.max(by: { $0.updatedAt < $1.updatedAt }) {
             currentID = latest.id
         } else {
@@ -42,11 +43,13 @@ final class ConversationController: ObservableObject {
     // MARK: 会话
 
     func select(_ id: UUID) {
+        ModuleRouter.shared.module = nil
         currentID = id
         direction = .auto
     }
 
     func newSession(title: String? = nil, sceneID: UUID? = nil, aiEnabled: Bool? = nil) {
+        ModuleRouter.shared.module = nil
         // 当前会话还是空的、也没起名，就直接复用它（移到要的场景里）
         if title == nil, let current, current.turns.isEmpty, current.autoTitled {
             store.moveSession(current.id, toScene: sceneID, before: nil)
@@ -102,95 +105,11 @@ final class ConversationController: ObservableObject {
 
     // MARK: 发送
 
-    // MARK: 面对面对话
+    // MARK: 模块共用
 
-    /// 打开面对面对话（全屏）
-    @Published var showFaceToFace = false
-
-    /// 按已知的语言翻译一句（面对面对话用），先本机离线，不行再在线
+    /// 按已知的语言翻译一句（面对面对话、同声传译用），先本机离线，不行再在线
     func translate(_ text: String, fromChinese: Bool) async -> String? {
         try? await translateSentence(text, chinese: fromChinese).0
-    }
-
-    /// 结束面对面对话：整段作为一轮保存到当前会话
-    func saveDialog(_ lines: [DialogLine]) {
-        guard !lines.isEmpty else { return }
-        var turn = Turn(source: lines.map(\.original).joined(separator: "\n"), sourceIsChinese: lines[0].originalIsChinese)
-        turn.dialog = lines
-        turn.state = .done
-        store.appendTurn(turn, to: currentID)
-        autoTitle(currentID, from: "面对面对话")
-    }
-
-    // MARK: 场景练习
-
-    @Published var showPractice = false
-    /// “再练一次”时沿用的场景；nil 表示先选场景
-    @Published private(set) var practiceSeed: PracticeRecord?
-
-    func startPractice(again record: PracticeRecord? = nil) {
-        practiceSeed = record.map { PracticeRecord(scenario: $0.scenario, role: $0.role, level: $0.level) }
-        showPractice = true
-    }
-
-    /// 练习过程中每一轮都存一下：第一次新建一轮，之后更新同一轮。返回这一轮的 ID
-    @discardableResult
-    func savePractice(_ record: PracticeRecord, into turnID: UUID?) -> UUID? {
-        guard record.lines.contains(where: \.isMine) else { return turnID }
-        let source = record.lines.map(\.text).joined(separator: "\n")
-        if let turnID, store.turn(currentID, turnID) != nil {
-            store.updateTurn(currentID, turnID) {
-                $0.practice = record
-                $0.source = source
-            }
-            store.updateSession(currentID) { $0.updatedAt = Date() }
-            return turnID
-        }
-        var turn = Turn(source: source, sourceIsChinese: false)
-        turn.practice = record
-        turn.state = .done
-        store.appendTurn(turn, to: currentID)
-        autoTitle(currentID, from: "场景练习")
-        return turn.id
-    }
-
-    // MARK: 同声传译
-
-    @Published var showInterpreter = false
-    /// 要接着录的那条传译记录；nil 表示新开一条
-    @Published private(set) var interpreterContinue: UUID?
-
-    /// 从“+”菜单开始：新开一条传译记录
-    func startInterpretation() {
-        interpreterContinue = nil
-        showInterpreter = true
-    }
-
-    /// 在传译记录上点“继续”：接着往这一条里录
-    func continueInterpretation(_ turnID: UUID) {
-        interpreterContinue = turnID
-        showInterpreter = true
-    }
-
-    /// 结束同传：新的一条作为一轮保存；继续录的就接在原来那条后面，时长累加
-    func saveTranscript(_ segments: [Interpreter.Segment], duration: TimeInterval, sourceIsChinese: Bool, into turnID: UUID?) {
-        let lines = segments.map { TranscriptLine(original: $0.original, translation: $0.translation ?? "") }
-        if let turnID, store.turn(currentID, turnID) != nil {
-            store.updateTurn(currentID, turnID) {
-                $0.transcript = ($0.transcript ?? []) + lines
-                $0.transcriptDuration = ($0.transcriptDuration ?? 0) + duration
-                $0.source = ($0.transcript ?? []).map(\.original).joined(separator: "\n")
-            }
-            store.updateSession(currentID) { $0.updatedAt = Date() }
-            return
-        }
-        guard !lines.isEmpty else { return }
-        var turn = Turn(source: lines.map(\.original).joined(separator: "\n"), sourceIsChinese: sourceIsChinese)
-        turn.transcript = lines
-        turn.transcriptDuration = duration
-        turn.state = .done
-        store.appendTurn(turn, to: currentID)
-        autoTitle(currentID, from: "同声传译")
     }
 
     // MARK: 语音输入

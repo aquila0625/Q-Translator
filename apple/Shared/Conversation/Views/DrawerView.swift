@@ -12,6 +12,7 @@ struct DrawerView: View {
     let onSelect: () -> Void
     let onAction: (DrawerAction) -> Void
 
+    @ObservedObject private var router = ModuleRouter.shared
     @AppStorage("drawer.collapsed") private var collapsedRaw = ""
     @State private var query = ""
     @State private var editing = false
@@ -49,6 +50,11 @@ struct DrawerView: View {
                 .padding(.horizontal, 14)
                 .frame(height: 44)
                 .background(Color.lxSurface, in: .capsule)
+
+                ModuleTiles(active: router.module) { module in
+                    router.open(module)
+                    onSelect()
+                }
             }
 
             HStack(spacing: 4) {

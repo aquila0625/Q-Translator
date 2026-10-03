@@ -1,3 +1,8 @@
 /* 主屏幕和程序坞里显示的名字 */
 "CFBundleDisplayName" = "Q-Translator";
 "CFBundleName" = "Q-Translator";
+/* Home Screen quick actions */
+"ShortcutInterpret" = "Interpreter";
+"ShortcutFace" = "Face to Face";
+"ShortcutPractice" = "Scene Practice";
+"ShortcutNew" = "New Translation";

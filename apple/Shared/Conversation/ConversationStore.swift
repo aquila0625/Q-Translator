@@ -78,6 +78,24 @@ final class ConversationStore: ObservableObject {
         }
     }
 
+    /// 取出所有同声传译、面对面对话、场景练习的轮次（搬到各自模块里），并从会话里删掉；
+    /// 因此变空的会话一起删掉
+    func extractModuleTurns() -> [Turn] {
+        var extracted: [Turn] = []
+        var emptied: Set<UUID> = []
+        for i in sessions.indices {
+            let isModule: (Turn) -> Bool = { $0.transcript != nil || $0.dialog != nil || $0.practice != nil }
+            let moving = sessions[i].turns.filter(isModule)
+            guard !moving.isEmpty else { continue }
+            extracted += moving
+            sessions[i].turns.removeAll(where: isModule)
+            if sessions[i].turns.isEmpty { emptied.insert(sessions[i].id) }
+        }
+        sessions.removeAll { emptied.contains($0.id) }
+        if !extracted.isEmpty { save() }
+        return extracted
+    }
+
     // MARK: 会话
 
     func session(_ id: UUID) -> ChatSession? { sessions.first { $0.id == id } }

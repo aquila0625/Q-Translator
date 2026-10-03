@@ -96,6 +96,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.post(name: .focusInput, object: nil)
     }
 
+    @objc func openModule(_ sender: NSMenuItem) {
+        guard let module = AppModule(rawValue: sender.representedObject as? String ?? "") else { return }
+        show()
+        ModuleRouter.shared.open(module, start: sender.tag == 1)
+    }
+
     @objc func openSettings(_ sender: Any?) {
         show()
         NotificationCenter.default.post(name: .openSettings, object: nil)
@@ -130,6 +136,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let file = NSMenu(title: "文件")
         file.addItem(withTitle: "新建会话", action: #selector(newSession(_:)), keyEquivalent: "n").target = self
         main.addItem(submenu(file, title: "文件"))
+
+        let features = NSMenu(title: "功能")
+        for (module, key, startTitle) in [(AppModule.interpret, "i", "开始同声传译"), (.face, "f", "开始面对面对话"), (.practice, "p", "")] {
+            let open = features.addItem(withTitle: module.fullTitle, action: #selector(openModule(_:)), keyEquivalent: key)
+            open.keyEquivalentModifierMask = [.command, .shift]
+            open.target = self
+            open.representedObject = module.rawValue
+            if !startTitle.isEmpty {
+                let start = features.addItem(withTitle: startTitle, action: #selector(openModule(_:)), keyEquivalent: key)
+                start.keyEquivalentModifierMask = [.command, .shift, .option]
+                start.isAlternate = true
+                start.target = self
+                start.representedObject = module.rawValue
+                start.tag = 1
+            }
+        }
+        main.addItem(submenu(features, title: "功能"))
 
         let edit = NSMenu(title: "编辑")
         edit.addItem(withTitle: "撤销", action: Selector(("undo:")), keyEquivalent: "z")

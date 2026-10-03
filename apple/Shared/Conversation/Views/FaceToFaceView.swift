@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// 面对面对话：手机平放在桌上，上半屏倒过来给对方看。
-/// 各自按自己的大按钮说话，说完自动翻译成另一种语言，大字显示并朗读。退出时整段对话保存到会话里。
+/// 各自按自己的大按钮说话，说完自动翻译成另一种语言，大字显示并朗读。退出时整段对话保存到面对面模块的记录里。
 struct FaceToFaceView: View {
     @ObservedObject var controller: ConversationController
     @ObservedObject private var voice = VoiceInput.shared
@@ -43,7 +43,7 @@ struct FaceToFaceView: View {
         .onDisappear {
             if voice.isListening { voice.cancel() }
             Speaker.shared.stop()
-            controller.saveDialog(lines)
+            ModuleStore.shared.addDialog(lines)
         }
         #if os(macOS)
         .frame(minWidth: 520, minHeight: 760)
@@ -179,24 +179,17 @@ struct FaceToFaceView: View {
     }
 }
 
-/// 会话里保存的一段面对面对话：对方在左、我在右，译文在上、原话在下
-struct DialogCard: View {
+/// 一段面对面对话的全部句子：对方在左、我在右，译文在上、原话在下
+struct DialogBubbles: View {
     let lines: [DialogLine]
-    let date: Date
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("面对面对话 · \(lines.count) 句 · \(date.formatted(date: .omitted, time: .shortened))", systemImage: "person.2.fill")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color.lxDialogInk)
-                .frame(maxWidth: .infinity)
             ForEach(lines) { line in
                 bubble(line)
                     .frame(maxWidth: .infinity, alignment: line.isMine ? .trailing : .leading)
             }
         }
-        .padding(12)
-        .background(Color.lxDialogCard, in: .rect(cornerRadius: 18))
     }
 
     private func bubble(_ line: DialogLine) -> some View {

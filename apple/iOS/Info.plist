@@ -30,6 +30,41 @@
     <true/>
     <key>NSCameraUsageDescription</key>
     <string>拍下要翻译的文字。照片只在本机识别，不会上传。</string>
+    <key>UIApplicationShortcutItems</key>
+    <array>
+        <dict>
+            <key>UIApplicationShortcutItemType</key>
+            <string>interpret</string>
+            <key>UIApplicationShortcutItemTitle</key>
+            <string>ShortcutInterpret</string>
+            <key>UIApplicationShortcutItemIconSymbolName</key>
+            <string>captions.bubble</string>
+        </dict>
+        <dict>
+            <key>UIApplicationShortcutItemType</key>
+            <string>face</string>
+            <key>UIApplicationShortcutItemTitle</key>
+            <string>ShortcutFace</string>
+            <key>UIApplicationShortcutItemIconSymbolName</key>
+            <string>person.2</string>
+        </dict>
+        <dict>
+            <key>UIApplicationShortcutItemType</key>
+            <string>practice</string>
+            <key>UIApplicationShortcutItemTitle</key>
+            <string>ShortcutPractice</string>
+            <key>UIApplicationShortcutItemIconSymbolName</key>
+            <string>theatermasks</string>
+        </dict>
+        <dict>
+            <key>UIApplicationShortcutItemType</key>
+            <string>new</string>
+            <key>UIApplicationShortcutItemTitle</key>
+            <string>ShortcutNew</string>
+            <key>UIApplicationShortcutItemIconSymbolName</key>
+            <string>square.and.pencil</string>
+        </dict>
+    </array>
     <key>UILaunchScreen</key>
     <dict/>
     <key>UISupportedInterfaceOrientations</key>

@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// 同声传译：听讲座、开会时用。持续收音，滚动显示双语字幕，上面原文、下面译文，正在说的那句是蓝底。
-/// 结束时整段字幕存成一条“传译记录”。
+/// 结束时整段字幕存成同声传译模块里的一条记录。
 struct InterpreterView: View {
     @ObservedObject var controller: ConversationController
     @StateObject private var interpreter: Interpreter
@@ -17,13 +17,16 @@ struct InterpreterView: View {
     private let continuing: UUID?
     private let previous: [TranscriptLine]
     private let previousDuration: TimeInterval
+    private let continuingDirection: Bool?
 
-    init(controller: ConversationController) {
+    /// continuing：要接着录的那条记录；nil 表示新开一条
+    init(controller: ConversationController, continuing: UUID? = nil) {
         self.controller = controller
-        let turn = controller.interpreterContinue.flatMap { controller.store.turn(controller.currentID, $0) }
-        continuing = turn?.id
-        previous = turn?.transcript ?? []
-        previousDuration = turn?.transcriptDuration ?? 0
+        let record = continuing.flatMap { ModuleStore.shared.interpretation($0) }
+        self.continuing = record?.id
+        continuingDirection = record?.sourceIsChinese
+        previous = record?.lines ?? []
+        previousDuration = record?.duration ?? 0
         let translator = LiveTranslator { text, chinese in await controller.translate(text, fromChinese: chinese) }
         _translator = StateObject(wrappedValue: translator)
         _interpreter = StateObject(wrappedValue: Interpreter { text, chinese, live in
@@ -51,7 +54,7 @@ struct InterpreterView: View {
         .translationTask(translator.configuration) { session in await translator.run(session) }
         .task {
             // 继续录时沿用那条记录的方向（不改设置里的默认方向）
-            let chinese = continuing.flatMap { controller.store.turn(controller.currentID, $0)?.sourceIsChinese } ?? sourceIsChinese
+            let chinese = continuingDirection ?? sourceIsChinese
             await translator.prepare(fromChinese: chinese)
             await interpreter.start(sourceIsChinese: chinese)
         }
@@ -249,78 +252,9 @@ struct InterpreterView: View {
     }
 
     private func save() {
-        controller.saveTranscript(interpreter.segments, duration: interpreter.elapsed,
-                                  sourceIsChinese: interpreter.sourceIsChinese, into: continuing)
+        let lines = interpreter.segments.map { TranscriptLine(original: $0.original, translation: $0.translation ?? "") }
+        ModuleStore.shared.saveInterpretation(lines, duration: interpreter.elapsed,
+                                              sourceIsChinese: interpreter.sourceIsChinese, into: continuing)
         Speaker.shared.stop()
-    }
-}
-
-/// 会话里保存的同传记录：先显示前几句，可以展开全部；可以复制全部字幕
-struct TranscriptCard: View {
-    let lines: [TranscriptLine]
-    let duration: Double?
-    let sourceIsChinese: Bool
-    let date: Date
-    let expanded: Bool
-    let onToggleExpand: () -> Void
-    /// 接着往这条记录里录（比如讲座中间休息完）
-    var onContinue: () -> Void = {}
-
-    /// 收起时显示最后三句：继续录的时候最新的内容在下面
-    private var shown: [TranscriptLine] { expanded ? lines : Array(lines.suffix(3)) }
-
-    private var allText: String {
-        lines.map { $0.original + "\n" + $0.translation }.joined(separator: "\n\n")
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Label("同声传译 · \(lines.count) 句" + (duration.map { " · " + AudioReplayButton.format($0) } ?? "")
-                      + " · " + (sourceIsChinese ? "中 → 英" : "英 → 中"), systemImage: "captions.bubble.fill")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.lxTranscriptInk)
-                Spacer(minLength: 0)
-                CopyButton(text: allText, label: "复制全部字幕", title: "复制全部")
-            }
-            if !expanded, lines.count > 3 {
-                Text("… 前面还有 \(lines.count - 3) 句").font(.caption).foregroundStyle(.tertiary)
-            }
-            ForEach(shown) { line in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(line.original).font(.footnote).foregroundStyle(.secondary)
-                    Text(line.translation).font(.system(size: 16, weight: .medium))
-                }
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            HStack {
-                if lines.count > 3 {
-                    Button(action: onToggleExpand) {
-                        Label(expanded ? "收起" : "展开全部 \(lines.count) 句", systemImage: expanded ? "chevron.up" : "chevron.down")
-                            .font(.footnote.weight(.semibold))
-                            .frame(minHeight: 36)
-                            .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Color.lxTranscriptInk)
-                }
-                Spacer(minLength: 0)
-                Button(action: onContinue) {
-                    Label("继续传译", systemImage: "mic.fill")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(Color.lxBackground)
-                        .padding(.horizontal, 14)
-                        .frame(height: 32)
-                        .background(Color.lxTranscriptInk, in: .capsule)
-                        .frame(minHeight: 44)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("接着往这条记录里录")
-            }
-        }
-        .padding(12)
-        .background(Color.lxTranscriptCard, in: .rect(cornerRadius: 18))
     }
 }

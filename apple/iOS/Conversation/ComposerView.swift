@@ -85,12 +85,6 @@ struct ComposerView: View {
                     Button("从相册选图片（可多选）", systemImage: "photo.on.rectangle") { showPhotos = true }
                     Button("从文件选择", systemImage: "folder") { showFiles = true }
                     Button("粘贴剪贴板", systemImage: "doc.on.clipboard") { paste() }
-                    Divider()
-                    Button("面对面对话", systemImage: "person.2") { controller.showFaceToFace = true }
-                    Button("同声传译", systemImage: "captions.bubble") { controller.startInterpretation() }
-                    Button("英语场景练习", systemImage: "theatermasks") {
-                        if AISettings.shared.isConfigured { controller.startPractice() } else { onNeedAI() }
-                    }
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 18, weight: .medium))

@@ -52,6 +52,7 @@ struct WideRootView: View {
     @ObservedObject var controller: ConversationController
     @State private var sheet: RootSheet?
     @State private var dropTargeted = false
+    @ObservedObject private var router = ModuleRouter.shared
 
     var body: some View {
         GeometryReader { geometry in
@@ -81,6 +82,14 @@ struct WideRootView: View {
                             if !images.isEmpty { controller.attachImages(images) }
                         }
                         return true
+                    }
+                    // 三个模块：显示在右边，盖在翻译上；点左边的会话回到翻译
+                    .overlay {
+                        if let module = router.module {
+                            ModulePage(module: module, controller: controller, wide: true)
+                                .id(module)
+                                .background(Color.lxBackground.ignoresSafeArea())
+                        }
                     }
             }
         }

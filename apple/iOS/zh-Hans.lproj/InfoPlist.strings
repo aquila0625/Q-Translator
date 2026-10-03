@@ -4,3 +4,8 @@
 /* 语音输入 */
 "NSMicrophoneUsageDescription" = "说话来翻译。录音只保存在本机。";
 "NSSpeechRecognitionUsageDescription" = "把你说的话变成文字来翻译。能在本机识别时只在本机识别。";
+/* 主屏幕快捷操作 */
+"ShortcutInterpret" = "同声传译";
+"ShortcutFace" = "面对面对话";
+"ShortcutPractice" = "场景练习";
+"ShortcutNew" = "新建翻译";

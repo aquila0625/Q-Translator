@@ -28,9 +28,10 @@ struct PracticeView: View {
     @State private var savedTurn: UUID?
     @FocusState private var focused: Bool
 
-    init(controller: ConversationController) {
+    /// seed：直接练这个场景（模块首页点了某个场景，或者“再练一次”）；nil 时先选场景
+    init(controller: ConversationController, seed: PracticeRecord? = nil) {
         self.controller = controller
-        _record = State(initialValue: controller.practiceSeed)
+        _record = State(initialValue: seed.map { PracticeRecord(scenario: $0.scenario, role: $0.role, level: $0.level) })
     }
 
     var body: some View {
@@ -65,26 +66,6 @@ struct PracticeView: View {
 
     // MARK: 选场景
 
-    private struct Preset: Identifiable {
-        let title: String
-        let role: String
-        let detail: String
-        let symbol: String
-        var id: String { title }
-    }
-
-    private static let presets = [
-        Preset(title: "租房", role: "房东", detail: "暖气坏了，和房东约时间来修", symbol: "house.fill"),
-        Preset(title: "餐厅点餐", role: "服务员", detail: "点餐、问推荐、结账", symbol: "fork.knife"),
-        Preset(title: "酒店入住", role: "前台", detail: "办理入住，问早餐和退房时间", symbol: "bed.double.fill"),
-        Preset(title: "机场值机", role: "地勤", detail: "值机、托运行李、选座位", symbol: "airplane"),
-        Preset(title: "看医生", role: "医生", detail: "描述症状，听医生的建议", symbol: "cross.case.fill"),
-        Preset(title: "工作面试", role: "面试官", detail: "介绍自己的经历，回答面试问题", symbol: "briefcase.fill"),
-        Preset(title: "购物退换", role: "店员", detail: "问尺码、试穿、退换货", symbol: "cart.fill"),
-        Preset(title: "课堂讨论", role: "老师", detail: "课上提问、讨论作业", symbol: "graduationcap.fill"),
-        Preset(title: "同事闲聊", role: "同事", detail: "茶水间聊周末和工作", symbol: "cup.and.saucer.fill"),
-    ]
-
     private var setup: some View {
         VStack(spacing: 0) {
             HStack {
@@ -107,7 +88,7 @@ struct PracticeView: View {
                     .pickerStyle(.segmented)
 
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
-                        ForEach(Self.presets) { preset in
+                        ForEach(PracticePreset.all) { preset in
                             Button { begin(scenario: preset.title + "：" + preset.detail, role: preset.role) } label: {
                                 presetTile(preset)
                             }
@@ -144,7 +125,7 @@ struct PracticeView: View {
         }
     }
 
-    private func presetTile(_ preset: Preset) -> some View {
+    private func presetTile(_ preset: PracticePreset) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: preset.symbol).foregroundStyle(Color.lxPracticeInk)
@@ -526,7 +507,7 @@ struct PracticeView: View {
             }
             updated.lines.append(PracticeLine(isMine: false, text: reply.reply, chinese: reply.chinese))
             withAnimation(.snappy) { record = updated }
-            savedTurn = controller.savePractice(updated, into: savedTurn)
+            savedTurn = ModuleStore.shared.savePractice(updated, into: savedTurn)
             if speak { Speaker.shared.play(.english(reply.reply)) }
         } catch {
             self.error = error.localizedDescription
@@ -539,7 +520,7 @@ struct PracticeView: View {
         if voice.isListening { voice.cancel() }
         Speaker.shared.stop()
         if let record, record.lines.contains(where: \.isMine) {
-            savedTurn = controller.savePractice(record, into: savedTurn)
+            savedTurn = ModuleStore.shared.savePractice(record, into: savedTurn)
             showSummary = true
         } else {
             dismiss()
@@ -661,7 +642,7 @@ struct PracticeSummary: View {
                     }
                     .buttonStyle(.plain)
                 }
-                Text("这次练习已保存在当前会话里。").font(.caption).foregroundStyle(.tertiary).frame(maxWidth: .infinity)
+                Text("这次练习已保存在练习记录里。").font(.caption).foregroundStyle(.tertiary).frame(maxWidth: .infinity)
             }
             .padding(20)
         }
@@ -687,78 +668,25 @@ struct PracticeSummary: View {
     }
 }
 
-/// 会话里保存的一次场景练习：收起时只看最后几句，可以再练一次
-struct PracticeCard: View {
-    let record: PracticeRecord
-    let date: Date
-    let expanded: Bool
-    let onToggleExpand: () -> Void
-    var onAgain: () -> Void = {}
+/// 预设的练习场景
+struct PracticePreset: Identifiable {
+    let title: String
+    let role: String
+    let detail: String
+    let symbol: String
+    var id: String { title }
 
-    private var shown: [PracticeLine] { expanded ? record.lines : Array(record.lines.suffix(4)) }
-    private var betterCount: Int { record.lines.filter { $0.better != nil }.count }
+    var scenario: String { title + "：" + detail }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("场景练习 · AI 是\(record.role.isEmpty ? "对方" : record.role) · \(record.lines.count) 句 · \(date.formatted(date: .omitted, time: .shortened))",
-                  systemImage: "theatermasks.fill")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color.lxPracticeInk)
-            Text(record.scenario).font(.footnote).foregroundStyle(.secondary)
-            if !expanded, record.lines.count > 4 {
-                Text("… 前面还有 \(record.lines.count - 4) 句").font(.caption).foregroundStyle(.tertiary)
-            }
-            ForEach(shown) { line in
-                VStack(alignment: line.isMine ? .trailing : .leading, spacing: 4) {
-                    Text(line.text)
-                        .font(.subheadline)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(line.isMine ? Color.lxAccentSoft : Color.lxBackground.opacity(0.8), in: .rect(cornerRadius: 14))
-                        .textSelection(.enabled)
-                    if let better = line.better {
-                        Text("更地道：" + better)
-                            .font(.caption)
-                            .foregroundStyle(Color.lxTranscriptInk)
-                            .multilineTextAlignment(.trailing)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: line.isMine ? .trailing : .leading)
-                .padding(line.isMine ? .leading : .trailing, 36)
-            }
-            if betterCount > 0 || !record.phrases.isEmpty {
-                Text("\(betterCount) 处可以更地道 · \(record.phrases.count) 个新说法")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            HStack {
-                if record.lines.count > 4 {
-                    Button(action: onToggleExpand) {
-                        Label(expanded ? "收起" : "展开全部 \(record.lines.count) 句", systemImage: expanded ? "chevron.up" : "chevron.down")
-                            .font(.footnote.weight(.semibold))
-                            .frame(minHeight: 36)
-                            .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Color.lxPracticeInk)
-                }
-                Spacer(minLength: 0)
-                Button(action: onAgain) {
-                    Label("再练一次", systemImage: "arrow.counterclockwise")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(Color.lxBackground)
-                        .padding(.horizontal, 14)
-                        .frame(height: 32)
-                        .background(Color.lxPracticeInk, in: .capsule)
-                        .frame(minHeight: 44)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("用同一个场景重新练一次")
-            }
-        }
-        .padding(12)
-        .background(Color.lxPracticeCard, in: .rect(cornerRadius: 18))
-    }
+    static let all = [
+        PracticePreset(title: "租房", role: "房东", detail: "暖气坏了，和房东约时间来修", symbol: "house.fill"),
+        PracticePreset(title: "餐厅点餐", role: "服务员", detail: "点餐、问推荐、结账", symbol: "fork.knife"),
+        PracticePreset(title: "酒店入住", role: "前台", detail: "办理入住，问早餐和退房时间", symbol: "bed.double.fill"),
+        PracticePreset(title: "机场值机", role: "地勤", detail: "值机、托运行李、选座位", symbol: "airplane"),
+        PracticePreset(title: "看医生", role: "医生", detail: "描述症状，听医生的建议", symbol: "cross.case.fill"),
+        PracticePreset(title: "工作面试", role: "面试官", detail: "介绍自己的经历，回答面试问题", symbol: "briefcase.fill"),
+        PracticePreset(title: "购物退换", role: "店员", detail: "问尺码、试穿、退换货", symbol: "cart.fill"),
+        PracticePreset(title: "课堂讨论", role: "老师", detail: "课上提问、讨论作业", symbol: "graduationcap.fill"),
+        PracticePreset(title: "同事闲聊", role: "同事", detail: "茶水间聊周末和工作", symbol: "cup.and.saucer.fill"),
+    ]
 }
