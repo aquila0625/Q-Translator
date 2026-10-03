@@ -368,7 +368,7 @@ struct ConversationView: View {
                 #if os(macOS)
                 tip("photo.on.rectangle", "⌘V 粘贴截图，或把图片拖进来")
                 #else
-                tip("plus.circle", "点左下角的 + 拍照或选图片")
+                tip("camera", "点左下角的相机拍照，或相册选图片")
                 #endif
                 tip("tray.full", "每次翻译都会保存在这个会话里")
             }

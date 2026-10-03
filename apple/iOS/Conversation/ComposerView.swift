@@ -2,7 +2,7 @@ import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// 底部输入栏：加号（拍照、相册多选、文件、粘贴）、方向、AI 优化开关、发送。
+/// 底部输入栏：拍照、相册多选、更多（文件、粘贴）、方向、AI 优化开关、发送。
 /// 平时最多占屏幕 30%，粘贴长文时放宽到约一半，还可以全屏编辑。
 struct ComposerView: View {
     @ObservedObject var controller: ConversationController
@@ -77,63 +77,10 @@ struct ComposerView: View {
                 .padding(.top, isLong ? 0 : 10)
                 .padding(.bottom, 4)
 
-            HStack(spacing: 6) {
-                Menu {
-                    if CameraPicker.isAvailable {
-                        Button("拍照", systemImage: "camera") { showCamera = true }
-                    }
-                    Button("从相册选图片（可多选）", systemImage: "photo.on.rectangle") { showPhotos = true }
-                    Button("从文件选择", systemImage: "folder") { showFiles = true }
-                    Button("粘贴剪贴板", systemImage: "doc.on.clipboard") { paste() }
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 18, weight: .medium))
-                        .frame(width: 44, height: 44)
-                        .contentShape(.rect)
-                }
-                .accessibilityLabel("添加图片或粘贴")
-
-                Button { controller.cycleDirection() } label: {
-                    chip(directionLabel, systemName: "arrow.left.arrow.right", on: controller.direction != .auto)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("翻译方向：\(directionLabel)，点按切换")
-
-                Button {
-                    if !session.aiEnabled, !AISettings.shared.isConfigured {
-                        onNeedAI()
-                    }
-                    controller.setAI(!session.aiEnabled)
-                } label: {
-                    chip("AI 优化", systemName: "sparkles", on: session.aiEnabled, ai: true)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("AI 优化")
-                .accessibilityValue(session.aiEnabled ? "开" : "关")
-
-                Spacer(minLength: 0)
-
-                if !canSend {
-                    // 输入框没有内容时，发送按钮换成麦克风
-                    MicButton(size: 38) {
-                        focused.wrappedValue = false
-                        controller.startVoice()
-                    }
-                } else {
-                Button {
-                    controller.send()
-                } label: {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(Color.lxOnAccent)
-                        .frame(width: 38, height: 38)
-                        .background(canSend ? Color.lxAccent : Color.secondary.opacity(0.4), in: .circle)
-                        .frame(width: 44, height: 44)
-                }
-                .buttonStyle(.plain)
-                .disabled(!canSend)
-                .accessibilityLabel("翻译")
-                }
+            // 窄屏放不下时，“AI 优化”缩成“AI”
+            ViewThatFits(in: .horizontal) {
+                bottomRow(compact: false)
+                bottomRow(compact: true)
             }
             .padding(.horizontal, 4)
             .padding(.bottom, 2)
@@ -209,6 +156,84 @@ extension ComposerView {
         case .auto: "自动"
         case .englishToChinese: "英→中"
         case .chineseToEnglish: "中→英"
+        }
+    }
+
+    /// 底部一行：拍照、相册、更多（文件、粘贴）、方向、AI 优化、麦克风或发送
+    private func bottomRow(compact: Bool) -> some View {
+        HStack(spacing: 4) {
+            if CameraPicker.isAvailable {
+                Button { showCamera = true } label: {
+                    Image(systemName: "camera")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(Color.lxAccent)
+                        .frame(width: 40, height: 44)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("拍照翻译")
+            }
+            Button { showPhotos = true } label: {
+                Image(systemName: "photo")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(Color.lxAccent)
+                    .frame(width: 40, height: 44)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("从相册选图片（可多选）")
+            Menu {
+                Button("从文件选择", systemImage: "folder") { showFiles = true }
+                Button("粘贴剪贴板", systemImage: "doc.on.clipboard") { paste() }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 16, weight: .medium))
+                    .frame(width: 36, height: 44)
+                    .contentShape(.rect)
+            }
+            .accessibilityLabel("更多：从文件选择、粘贴")
+
+            Button { controller.cycleDirection() } label: {
+                chip(directionLabel, systemName: "arrow.left.arrow.right", on: controller.direction != .auto)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("翻译方向：\(directionLabel)，点按切换")
+
+            Button {
+                if !session.aiEnabled, !AISettings.shared.isConfigured {
+                    onNeedAI()
+                }
+                controller.setAI(!session.aiEnabled)
+            } label: {
+                chip(compact ? "AI" : "AI 优化", systemName: "sparkles", on: session.aiEnabled, ai: true)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("AI 优化")
+            .accessibilityValue(session.aiEnabled ? "开" : "关")
+
+            Spacer(minLength: 0)
+
+            if !canSend {
+                // 输入框没有内容时，发送按钮换成麦克风
+                MicButton(size: 38) {
+                    focused.wrappedValue = false
+                    controller.startVoice()
+                }
+            } else {
+            Button {
+                controller.send()
+            } label: {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Color.lxOnAccent)
+                    .frame(width: 38, height: 38)
+                    .background(canSend ? Color.lxAccent : Color.secondary.opacity(0.4), in: .circle)
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSend)
+            .accessibilityLabel("翻译")
+            }
         }
     }
 
