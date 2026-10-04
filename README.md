@@ -36,7 +36,7 @@ It is free and open source. Everything that can run on the device does, the app 
 ### Platform extras
 - **iPhone**: Home Screen quick actions (long-press the icon) for interpretation, face to face, scene practice and a new translation.
 - **Mac**: global hotkeys: `⌥D` main window, `⌥F` translate the selection in any app, `⌥R` translate and replace, `⌥V` clipboard, `⌥S` screenshot, `⌥A` quick input. Plus "translate" in the right-click Services menu, `⌘V` to paste an image, and a Features menu (`⇧⌘I` interpretation, `⇧⌘F` face to face, `⇧⌘P` practice).
-- **Android**: share text or images to Q-Translator, or pick "快译" from the text-selection menu in any app.
+- **Android**: share text or images to Q-Translator, pick "快译" from the text-selection menu in any app, and use the home-screen shortcuts (long-press the icon) for interpretation, face to face, scene practice and a new translation.
 
 <p align="center"><img src="docs/images/mac.png" width="760" alt="Q-Translator on Mac"></p>
 
@@ -46,8 +46,8 @@ It is free and open source. Everything that can run on the device does, the app 
 | --- | --- |
 | iPhone | All features (`apple/`, iOS 26 or later) |
 | Mac | All features (`apple/`, macOS 26 or later) |
-| iPad | Runs the iPhone app with a wide layout; the newest features (voice, interpretation, face to face, practice) are being polished |
-| Android phone / tablet | Dictionary, sentence, photo and AI features (`android/`, Android 8 or later); voice and scenario features are coming |
+| iPad | All features (`apple/`, iPadOS 26 or later), with a two-column layout |
+| Android phone / tablet | All features (`android/`, Android 8 or later). Voice input, interpretation and face to face use the system speech recognizer and work best on Android 13+ with on-device recognition; replaying a voice-input recording needs Android 13+ |
 
 ## Where translations come from
 
@@ -114,6 +114,13 @@ cd android
 ```
 
 The APKs are written to `android/app/build/outputs/apk/release/`, one per CPU type (`arm64-v8a` for almost all current phones). Release builds are signed with the debug key so you can install them directly; use your own key before publishing to a store.
+
+To send Umeng usage statistics from your own build, put the keys in `android/local.properties` (ignored by git). Tablets use the tablet key and fall back to the phone key; with no key, nothing is sent and the consent prompt is not shown.
+
+```
+UMENG_APPKEY_ANDROID=...
+UMENG_APPKEY_ANDROID_TABLET=...
+```
 
 ## Repository layout
 
