@@ -4,6 +4,10 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- 语音输入、面对面对话、同声传译、练习的语音聊天 -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- 同声传译离开页面、回到桌面后继续收音：麦克风类型的前台服务和常驻通知 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".QTranslatorApp"
@@ -40,6 +44,11 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".modules.InterpretService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
