@@ -116,6 +116,13 @@ fun DrawerContent(
                 }
             }
         }
+        if (!editing && query.isBlank()) {
+            Spacer(Modifier.height(10.dp))
+            com.yishulabs.qtranslator.ui.modules.ModuleTiles(active = com.yishulabs.qtranslator.modules.ModuleRouter.module) { module ->
+                com.yishulabs.qtranslator.modules.ModuleRouter.open(module)
+                onSelect()
+            }
+        }
         Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
             if (editing) {
                 Text("用箭头排序；长按会话可以移到别的场景", fontSize = 13.sp, color = colors.ink3, modifier = Modifier.weight(1f).padding(start = 6.dp))
@@ -243,7 +250,7 @@ fun DrawerContent(
 /** 往左滑露出红色删除，松手后由调用方确认 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SwipeToDelete(onDelete: () -> Unit, content: @Composable () -> Unit) {
+fun SwipeToDelete(onDelete: () -> Unit, content: @Composable () -> Unit) {
     val state = rememberSwipeToDismissBoxState(confirmValueChange = { value ->
         if (value == SwipeToDismissBoxValue.EndToStart) onDelete()
         false

@@ -20,6 +20,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.yishulabs.qtranslator.conversation.ConversationController
+import com.yishulabs.qtranslator.modules.ModuleRouter
+import com.yishulabs.qtranslator.ui.modules.ModulePage
 import kotlinx.coroutines.launch
 
 /** 根界面弹出的面板 */
@@ -42,10 +44,15 @@ fun QTranslatorRoot(controller: ConversationController) {
                 Row(Modifier.fillMaxSize()) {
                     DrawerContent(controller, onSelect = {}, onSheet = { sheet = it }, modifier = Modifier.width(300.dp).fillMaxHeight())
                     VerticalDivider(color = Lx.colors.line)
-                    ConversationScreen(
-                        controller, wide = true, railAllowed = width - 300.dp >= 790.dp,
-                        onMenu = {}, onSheet = { sheet = it },
-                    )
+                    val module = ModuleRouter.module
+                    if (module != null) {
+                        ModulePage(module, controller, wide = true)
+                    } else {
+                        ConversationScreen(
+                            controller, wide = true, railAllowed = width - 300.dp >= 790.dp,
+                            onMenu = {}, onSheet = { sheet = it },
+                        )
+                    }
                 }
             } else {
                 val drawer = rememberDrawerState(DrawerValue.Closed)
@@ -63,10 +70,16 @@ fun QTranslatorRoot(controller: ConversationController) {
                         }
                     },
                 ) {
-                    ConversationScreen(
-                        controller, wide = false, railAllowed = false,
-                        onMenu = { scope.launch { drawer.open() } }, onSheet = { sheet = it },
-                    )
+                    val module = ModuleRouter.module
+                    if (module != null) {
+                        // 手机上模块页面全屏盖在翻译上，返回键回到翻译
+                        ModulePage(module, controller, wide = false)
+                    } else {
+                        ConversationScreen(
+                            controller, wide = false, railAllowed = false,
+                            onMenu = { scope.launch { drawer.open() } }, onSheet = { sheet = it },
+                        )
+                    }
                 }
             }
         }

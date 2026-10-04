@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 语音输入、面对面对话、同声传译、练习的语音聊天 -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
         android:name=".QTranslatorApp"
@@ -53,6 +55,10 @@
     <queries>
         <intent>
             <action android:name="android.speech.tts.engine.CHECK_TTS_DATA" />
+        </intent>
+        <!-- 安卓 11 起要声明才能找到系统的语音识别服务 -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
         </intent>
     </queries>
 </manifest>
