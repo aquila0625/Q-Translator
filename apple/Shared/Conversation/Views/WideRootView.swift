@@ -91,6 +91,14 @@ struct WideRootView: View {
                                 .background(Color.lxBackground.ignoresSafeArea())
                         }
                     }
+                    #if os(iOS)
+                    // iPad：模块页盖在会话上，输入框还留着焦点，键盘会一直挡住模块页
+                    .onChange(of: router.module) { _, module in
+                        if module != nil {
+                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        }
+                    }
+                    #endif
             }
         }
         .tint(.lxAccent)
