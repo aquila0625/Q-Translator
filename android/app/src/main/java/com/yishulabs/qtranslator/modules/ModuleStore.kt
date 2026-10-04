@@ -250,6 +250,9 @@ object ModuleRouter {
     /** 进入模块后马上开始的那件事（例如桌面快捷方式“同声传译”直接开录） */
     var launch by mutableStateOf<Launch?>(null)
 
+    /** 正在进行、全屏盖住整个界面的活动：传译、面对面对话或练习（ModuleActivityHost 显示它） */
+    var activity by mutableStateOf<Launch?>(null)
+
     /** 桌面快捷方式“新建翻译” */
     var newSessionRequested by mutableStateOf(false)
 

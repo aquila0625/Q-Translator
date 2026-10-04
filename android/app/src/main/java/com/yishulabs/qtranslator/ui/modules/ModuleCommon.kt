@@ -5,6 +5,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -52,8 +53,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.yishulabs.qtranslator.conversation.ConversationController
 import com.yishulabs.qtranslator.core.VoiceInput
 import com.yishulabs.qtranslator.modules.AppModule
@@ -129,11 +128,9 @@ sealed interface ModuleDetail {
 @Composable
 fun ModulePage(module: AppModule, controller: ConversationController, wide: Boolean) {
     var detail by remember(module) { mutableStateOf<ModuleDetail?>(null) }
-    var activity by remember { mutableStateOf<ModuleRouter.Launch?>(null) }
-
     fun start(launch: ModuleRouter.Launch) {
         if (launch is ModuleRouter.Launch.Interpret) beginInterpretation(launch.continuing, controller)
-        activity = launch
+        ModuleRouter.activity = launch
     }
 
     val launch = ModuleRouter.launch
@@ -173,20 +170,26 @@ fun ModulePage(module: AppModule, controller: ConversationController, wide: Bool
             is ModuleDetail.Practice -> PracticeRecordPage(d.id, onBack = { detail = null }, onAgain = { start(ModuleRouter.Launch.Practice(it)) })
         }
     }
+}
 
-    activity?.let { current ->
-        // 进行中的活动全屏显示，盖住状态栏和导航栏
-        Dialog(
-            onDismissRequest = { /* 各个活动自己处理返回键：结束并保存 */ },
-            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false, dismissOnBackPress = false),
-        ) {
-            Box(Modifier.fillMaxSize().background(Lx.colors.background)) {
-                val close = { activity = null }
-                when (current) {
-                    is ModuleRouter.Launch.Interpret -> InterpreterScreen(onClose = close)
-                    ModuleRouter.Launch.Face -> FaceToFaceScreen(controller, onClose = close)
-                    is ModuleRouter.Launch.Practice -> PracticeScreen(controller, seed = current.seed, onClose = close, onAgain = { seed -> activity = null; start(ModuleRouter.Launch.Practice(seed)) })
-                }
+/**
+ * 进行中的活动（传译、面对面、练习）：盖住整个界面，连同左边的会话列表和状态栏下面。放在根界面的最上层。
+ * 返回键由各个活动自己处理（结束并保存，或者收起传译）。
+ */
+@Composable
+fun ModuleActivityHost(controller: ConversationController) {
+    val current = ModuleRouter.activity ?: return
+    val close = { ModuleRouter.activity = null }
+    // 接住没被里面的按钮用掉的点击，不让它穿到下面的会话和抽屉上
+    Box(
+        Modifier.fillMaxSize().background(Lx.colors.background)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
+    ) {
+        when (current) {
+            is ModuleRouter.Launch.Interpret -> InterpreterScreen(onClose = close)
+            ModuleRouter.Launch.Face -> FaceToFaceScreen(controller, onClose = close)
+            is ModuleRouter.Launch.Practice -> androidx.compose.runtime.key(current) {
+                PracticeScreen(controller, seed = current.seed, onClose = close, onAgain = { ModuleRouter.activity = ModuleRouter.Launch.Practice(it) })
             }
         }
     }

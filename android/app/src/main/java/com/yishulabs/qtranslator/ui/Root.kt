@@ -94,6 +94,8 @@ fun QTranslatorRoot(controller: ConversationController) {
                 }
             }
         }
+        // 进行中的传译、面对面对话、练习：盖住整个界面
+        com.yishulabs.qtranslator.ui.modules.ModuleActivityHost(controller)
         sheet?.let { current ->
             val close = { sheet = null }
             when (current) {
