@@ -1,5 +1,9 @@
 package com.yishulabs.qtranslator.ui
 
+import androidx.compose.ui.graphics.Color
+
+import androidx.compose.foundation.border
+
 import com.yishulabs.qtranslator.modules.InterpretSession
 
 import android.content.Context
@@ -282,11 +286,22 @@ private fun SettingsMain(onPage: (SettingsPage) -> Unit) {
 fun <T> ChoiceRow(title: String, options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, modifier = Modifier.weight(1f), color = Lx.colors.ink)
-        SingleChoiceSegmentedButtonRow {
+        // 自己画的分段选择：系统的分段按钮内边距固定，“跟随系统”四个字会被截断
+        val shape = RoundedCornerShape(50)
+        Row(Modifier.height(34.dp).clip(shape).border(1.dp, Lx.colors.line, shape)) {
             options.forEachIndexed { index, (value, label) ->
-                // 不显示勾：“跟随系统”这样的四个字也放得下
-                SegmentedButton(selected == value, { onSelect(value) }, SegmentedButtonDefaults.itemShape(index, options.size), icon = {}) {
-                    Text(label, maxLines = 1, fontSize = 13.sp)
+                val on = selected == value
+                if (index > 0) Box(Modifier.width(1.dp).fillMaxHeight().background(Lx.colors.line))
+                Box(
+                    Modifier.fillMaxHeight().background(if (on) Lx.colors.accentSoft else Color.Transparent)
+                        .clickable { onSelect(value) }.padding(horizontal = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        label, maxLines = 1, softWrap = false, fontSize = 13.sp,
+                        fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (on) Lx.colors.accent else Lx.colors.ink,
+                    )
                 }
             }
         }
