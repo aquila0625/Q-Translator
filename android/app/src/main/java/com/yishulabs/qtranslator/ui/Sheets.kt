@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,12 +31,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Rotate90DegreesCw
 import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -48,16 +53,17 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -67,6 +73,8 @@ import com.yishulabs.qtranslator.ai.AISettings
 import com.yishulabs.qtranslator.conversation.ConversationController
 import com.yishulabs.qtranslator.conversation.HistoryStore
 import com.yishulabs.qtranslator.conversation.SceneCover
+import com.yishulabs.qtranslator.ui.modules.ConfirmDelete
+import com.yishulabs.qtranslator.ui.modules.PendingDelete
 
 private val Danger = Color(0xFFE5372B)
 
@@ -219,40 +227,69 @@ fun ImageViewer(controller: ConversationController, turnId: String, imageId: Str
     val index = turn?.images?.indexOfFirst { it.id == imageId } ?: -1
     val item = turn?.images?.getOrNull(index)
     if (item == null) {
-        onDismiss()
+        // 这张图被删掉了（或整轮被删）：关掉
+        LaunchedEffect(Unit) { onDismiss() }
         return
     }
-    val bitmap = remember(item.fileName, item.done) { store.image(item.fileName) }
+    val bitmap = remember(item.fileName, store.imageRevision) { store.image(item.fileName) }
+    // 点“看原图 / 看译文”切换
+    var showOriginal by remember { mutableStateOf(false) }
+    var pendingDelete by remember { mutableStateOf<PendingDelete?>(null) }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         BackHandler(onBack = onDismiss)
         Column(Modifier.fillMaxSize().background(Color.Black).statusBarsPadding().navigationBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onDismiss) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "返回", tint = Color.White) }
                 Text("图 ${index + 1} / ${turn.images.size}", color = Color.White, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                IconButton(onClick = onDismiss) { Icon(Icons.Rounded.Check, "完成", tint = Color(0xFF8CC0FF)) }
+                TextButton(onClick = onDismiss) { Text("完成", color = Color(0xFF8CC0FF), fontWeight = FontWeight.SemiBold) }
             }
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                if (bitmap != null) Image(bitmap.asImageBitmap(), "图 ${index + 1}", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
-            }
-            Text(
-                if (!item.done) "重新识别中…" else item.recognized.ifEmpty { "没有识别到文字" },
-                color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp, maxLines = 4, modifier = Modifier.padding(16.dp),
-            )
-            Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)) {
-                OutlinedButton(onClick = { controller.rotateImage(turnId, imageId) }) {
-                    Icon(Icons.Rounded.Rotate90DegreesCw, null, tint = Color.White)
-                    Spacer(Modifier.width(6.dp))
-                    Text("旋转", color = Color.White)
+                if (bitmap != null) {
+                    TranslatedImage(bitmap, item.blocks ?: emptyList(), showTranslation = !showOriginal && item.done, description = "图 ${index + 1}")
                 }
-                OutlinedButton(onClick = {
-                    controller.deleteImage(turnId, imageId)
-                    onDismiss()
-                }) {
-                    Icon(Icons.Rounded.Delete, null, tint = Color(0xFFFF9A82))
-                    Spacer(Modifier.width(6.dp))
-                    Text("删除这张", color = Color(0xFFFF9A82))
+            }
+            when {
+                !item.done -> Row(Modifier.align(Alignment.CenterHorizontally).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text("重新识别中…", color = Color.White, fontSize = 13.sp)
+                }
+                item.blocks.isNullOrEmpty() -> Text(
+                    "没有识别到文字", color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp,
+                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(12.dp),
+                )
+            }
+            // 四个按钮等宽，图标在上、文字在下，窄屏也不换行
+            Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ToolButton(
+                    if (showOriginal) "看译文" else "看原图", if (showOriginal) Icons.Rounded.Translate else Icons.Rounded.Image,
+                ) { showOriginal = !showOriginal }
+                ToolButton("重新识别", Icons.Rounded.Refresh, enabled = item.done) { controller.reprocessImage(turnId, imageId) }
+                ToolButton("旋转", Icons.Rounded.Rotate90DegreesCw, enabled = item.done) { controller.rotateImage(turnId, imageId) }
+                ToolButton("删除", Icons.Rounded.Delete, tint = Color(0xFFFF6B5E)) {
+                    val isLast = turn.images.size <= 1
+                    pendingDelete = PendingDelete(
+                        "删除这张图片和它的译文？", if (isLast) "这是这一轮里的最后一张，整轮翻译会一起删除。" else null,
+                    ) {
+                        controller.deleteImage(turnId, imageId)
+                        onDismiss()
+                    }
                 }
             }
         }
+        ConfirmDelete(pendingDelete, onDismiss = { pendingDelete = null })
+    }
+}
+
+@Composable
+private fun RowScope.ToolButton(title: String, icon: ImageVector, tint: Color = Color.White, enabled: Boolean = true, onClick: () -> Unit) {
+    Column(
+        Modifier.weight(1f).heightIn(min = 58.dp).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.12f))
+            .clickable(enabled = enabled, onClick = onClick).alpha(if (enabled) 1f else 0.4f).padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
+    ) {
+        Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
+        Text(title, color = tint, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }

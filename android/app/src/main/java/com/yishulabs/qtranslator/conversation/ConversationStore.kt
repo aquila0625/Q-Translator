@@ -5,8 +5,10 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.LruCache
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.yishulabs.qtranslator.analytics.Analytics
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -33,6 +35,12 @@ class ConversationStore(context: Context, private val scope: CoroutineScope) {
 
     private val file = File(context.filesDir, "conversations.json")
     val imagesDir = File(context.filesDir, "images").apply { mkdirs() }
+    /** 语音输入录下的原声（VoiceInput 存在这里） */
+    private val audioDir = File(context.filesDir, "audio")
+
+    /** 图片文件被替换（旋转）一次加一：界面按它重新读图，文件名不变也能刷新 */
+    var imageRevision by mutableIntStateOf(0)
+        private set
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = false }
     private var saveJob: Job? = null
     private val imageCache = object : LruCache<String, Bitmap>(48 * 1024 * 1024) {
@@ -127,6 +135,7 @@ class ConversationStore(context: Context, private val scope: CoroutineScope) {
 
     fun deleteSession(id: String) {
         session(id)?.turns?.flatMap { it.images }?.forEach { deleteImageFile(it.fileName) }
+        session(id)?.turns?.mapNotNull { it.audioFile }?.forEach { deleteAudioFile(it) }
         sessions = sessions.filter { it.id != id }
         save()
     }
@@ -138,6 +147,7 @@ class ConversationStore(context: Context, private val scope: CoroutineScope) {
     fun createScene(name: String, cover: SceneCover): SceneGroup {
         val scene = SceneGroup(name = name.trim().ifEmpty { "新场景" }, cover = cover)
         scenes = scenes + scene
+        Analytics.track(Analytics.Event.SCENE_NEW)
         save()
         return scene
     }
@@ -183,6 +193,7 @@ class ConversationStore(context: Context, private val scope: CoroutineScope) {
 
     fun deleteTurn(sessionId: String, turnId: String) {
         turn(sessionId, turnId)?.images?.forEach { deleteImageFile(it.fileName) }
+        turn(sessionId, turnId)?.audioFile?.let { deleteAudioFile(it) }
         updateSession(sessionId) { session -> session.copy(turns = session.turns.filter { it.id != turnId }) }
     }
 
@@ -197,8 +208,8 @@ class ConversationStore(context: Context, private val scope: CoroutineScope) {
 
     fun replaceImage(name: String, bitmap: Bitmap) {
         runCatching { File(imagesDir, name).outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 85, it) } }
-        imageCache.remove(name)
-        imageCache.remove("thumb:$name")
+        forgetCached(name)
+        imageRevision++
     }
 
     fun image(name: String): Bitmap? {
@@ -210,7 +221,7 @@ class ConversationStore(context: Context, private val scope: CoroutineScope) {
 
     /** 缩略图：按需要的边长缩小解码，省内存 */
     fun thumbnail(name: String, side: Int = 360): Bitmap? {
-        val key = "thumb:$name"
+        val key = "thumb$side:$name"
         imageCache.get(key)?.let { return it }
         val path = File(imagesDir, name).path
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -223,9 +234,17 @@ class ConversationStore(context: Context, private val scope: CoroutineScope) {
     }
 
     fun deleteImageFile(name: String) {
-        imageCache.remove(name)
-        imageCache.remove("thumb:$name")
+        forgetCached(name)
         File(imagesDir, name).delete()
+    }
+
+    fun deleteAudioFile(name: String) {
+        File(audioDir, name).delete()
+    }
+
+    /** 原图和各种尺寸的缩略图都从缓存里去掉 */
+    private fun forgetCached(name: String) {
+        imageCache.snapshot().keys.filter { it == name || it.endsWith(":$name") }.forEach { imageCache.remove(it) }
     }
 
     companion object {

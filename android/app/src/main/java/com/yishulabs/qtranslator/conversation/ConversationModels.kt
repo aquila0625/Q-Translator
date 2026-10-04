@@ -103,6 +103,16 @@ data class Turn(
             images.joinToString("\n") { it.recognized + "\n" + it.translation }
 }
 
+/** 内容的种类，用来筛选，也决定每一轮长什么样 */
+enum class TurnKind(val title: String) { WORD("单词"), SENTENCE("句子"), IMAGE("图片") }
+
+val Turn.kind: TurnKind
+    get() = when {
+        isImage -> TurnKind.IMAGE
+        word != null -> TurnKind.WORD
+        else -> TurnKind.SENTENCE
+    }
+
 /** 一个翻译会话 */
 @Serializable
 data class ChatSession(

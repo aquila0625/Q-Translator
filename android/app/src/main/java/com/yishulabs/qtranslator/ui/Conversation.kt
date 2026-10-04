@@ -1,5 +1,6 @@
 package com.yishulabs.qtranslator.ui
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -7,9 +8,9 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -23,24 +24,26 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
-import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.DriveFileMove
+import androidx.compose.material.icons.automirrored.rounded.DriveFileMove
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.EditNote
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Menu
+import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.TextFields
 import androidx.compose.material.icons.rounded.Translate
@@ -51,10 +54,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -68,11 +74,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -80,12 +93,22 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yishulabs.qtranslator.conversation.ConversationController
 import com.yishulabs.qtranslator.conversation.Turn
+import com.yishulabs.qtranslator.conversation.TurnKind
+import com.yishulabs.qtranslator.conversation.kind
 import com.yishulabs.qtranslator.core.SentenceResult
 import com.yishulabs.qtranslator.core.WordEntry
+import com.yishulabs.qtranslator.modules.AppModule
+import com.yishulabs.qtranslator.modules.ModuleRouter
+import com.yishulabs.qtranslator.ui.modules.ConfirmDelete
+import com.yishulabs.qtranslator.ui.modules.InterpretMiniBar
+import com.yishulabs.qtranslator.ui.modules.PendingDelete
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.DateFormat
+import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
+import java.util.Locale
 
 private val Danger = Color(0xFFE5372B)
 
@@ -103,6 +126,9 @@ fun ConversationScreen(
     val session = store.session(controller.currentId)
     val turns = session?.turns ?: emptyList()
     val sessionId = controller.currentId
+    // 顶部筛选：null 表示全部
+    var filter by remember(sessionId) { mutableStateOf<TurnKind?>(null) }
+    val rows = remember(turns, filter) { turnRows(turns, filter) }
 
     val listState = remember(sessionId) { rememberLazyListStateFor(turns.size) }
     val scope = rememberCoroutineScope()
@@ -111,6 +137,9 @@ fun ConversationScreen(
     var lastCount by remember(sessionId) { mutableIntStateOf(turns.size) }
     var highlighted by remember { mutableStateOf<String?>(null) }
     var editingTurn by remember(sessionId) { mutableStateOf<String?>(null) }
+    // 点选的那一轮显示操作按钮（最新一轮总是显示）；要删除、等确认的那一轮
+    var selectedTurn by remember(sessionId) { mutableStateOf<String?>(null) }
+    var deletingTurn by remember { mutableStateOf<PendingDelete?>(null) }
     var showOutline by remember { mutableStateOf(false) }
     var railOpen by rememberSaveable { mutableStateOf(true) }
     var word by remember { mutableStateOf<WordEntry?>(null) }
@@ -121,13 +150,28 @@ fun ConversationScreen(
     var renaming by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
 
-    val bottomIndex = turns.size   // 最后有一个 1dp 的占位项，滚到它就是滚到最底下
+    val bottomIndex = rows.size   // 最后有一个 1dp 的占位项，滚到它就是滚到最底下
     LaunchedEffect(turns.size) {
+        // 只在发了新内容时滚到底；删掉一条时停在原处
         if (turns.size > lastCount) {
             expanded = expanded + turns.last().id
-            listState.animateScrollToItem(bottomIndex)
+            // 发了新内容：回到全部，取消点选
+            filter = null
+            selectedTurn = null
+            listState.animateScrollToItem(turns.size)
         }
         lastCount = turns.size
+    }
+    // 平时贴底（最新的在下面）；筛选时从顶部开始排
+    var filterApplied by remember(sessionId) { mutableStateOf(false) }
+    LaunchedEffect(filter) {
+        if (filter != null) {
+            filterApplied = true
+            listState.scrollToItem(0)
+        } else if (filterApplied) {
+            filterApplied = false
+            listState.scrollToItem(bottomIndex)
+        }
     }
     // 刚发出的这一轮出结果后变高，跟着滚到底
     val last = turns.lastOrNull()
@@ -143,6 +187,8 @@ fun ConversationScreen(
     }
 
     fun jumpTo(turnId: String) {
+        // 跳过去时回到全部，下标按全部的轮次算
+        filter = null
         val index = turns.indexOfFirst { it.id == turnId }
         if (index < 0) return
         scope.launch {
@@ -190,7 +236,7 @@ fun ConversationScreen(
                                 titleMenu = false
                                 renaming = true
                             })
-                            DropdownMenuItem(text = { Text("移到场景") }, leadingIcon = { Icon(Icons.Rounded.DriveFileMove, null) }, onClick = {
+                            DropdownMenuItem(text = { Text("移到场景") }, leadingIcon = { Icon(Icons.AutoMirrored.Rounded.DriveFileMove, null) }, onClick = {
                                 titleMenu = false
                                 moveMenu = true
                             })
@@ -213,38 +259,71 @@ fun ConversationScreen(
                         }
                     }
                     if (wide) Spacer(Modifier.weight(1f))
-                    BarButton(Icons.AutoMirrored.Rounded.FormatListBulleted, "输入记录") {
+                    BarButton(Icons.Rounded.History, "输入记录") {
                         if (wide && railAllowed) railOpen = !railOpen else showOutline = true
                     }
                     BarButton(Icons.Rounded.EditNote, "新建会话") { onSheet(RootSheet.NewSession) }
+                }
+
+                FilterBar(turns, filter) {
+                    selectedTurn = null
+                    filter = it
                 }
 
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(26.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(20.dp),
                     ) {
-                        itemsIndexed(turns, key = { _, turn -> turn.id }) { _, turn ->
+                        items(rows, key = { it.turn.id }) { row ->
+                            val turn = row.turn
                             val isHighlighted = highlighted == turn.id
-                            Box(
-                                Modifier.clip(RoundedCornerShape(20.dp))
-                                    .background(if (isHighlighted) colors.accent.copy(alpha = 0.12f) else Color.Transparent)
-                                    .border(2.dp, if (isHighlighted) colors.accent.copy(alpha = 0.6f) else Color.Transparent, RoundedCornerShape(20.dp))
-                                    .padding(if (isHighlighted) 8.dp else 0.dp),
-                            ) {
-                                TurnItem(
-                                    turn = turn, controller = controller,
-                                    expanded = turn.id in expanded,
-                                    onToggleExpand = { expanded = if (turn.id in expanded) expanded - turn.id else expanded + turn.id },
-                                    editing = editingTurn == turn.id,
-                                    onEditingChange = { editingTurn = if (it) turn.id else null },
-                                    onOpenWord = { word = it },
-                                    onReply = { replyTo = it },
-                                    onOpenImage = { imageRef = turn.id to it },
-                                    onNeedAI = { onSheet(RootSheet.Settings) },
-                                )
+                            val picked = selectedTurn == turn.id
+                            val scale by animateFloatAsState(if (isHighlighted) 1.02f else 1f, label = "highlight")
+                            Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                                row.time?.let { time ->
+                                    Text(
+                                        time, fontSize = 12.sp, color = colors.ink3,
+                                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                                            .background(colors.surface, RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 3.dp),
+                                    )
+                                }
+                                // 往左滑露出删除，松手后确认
+                                TurnSwipeToDelete(onDelete = { deletingTurn = deleteRequest(turn, controller) { if (selectedTurn == turn.id) selectedTurn = null } }) {
+                                    Box(
+                                        Modifier
+                                            .graphicsLayer { scaleX = scale; scaleY = scale }
+                                            // 跳过来的那一轮闪一下；点选的那一轮有一圈淡淡的边框
+                                            .drawBehind {
+                                                if (!isHighlighted && !picked) return@drawBehind
+                                                val outset = 10.dp.toPx()
+                                                val radius = androidx.compose.ui.geometry.CornerRadius(20.dp.toPx())
+                                                val topLeft = Offset(-outset, -outset)
+                                                val area = Size(size.width + outset * 2, size.height + outset * 2)
+                                                drawRoundRect(colors.accent.copy(alpha = if (isHighlighted) 0.14f else 0.04f), topLeft, area, radius)
+                                                drawRoundRect(
+                                                    colors.accent.copy(alpha = if (isHighlighted) 0.6f else 0.3f), topLeft, area, radius,
+                                                    style = Stroke(width = (if (isHighlighted) 2.dp else 1.5.dp).toPx()),
+                                                )
+                                            },
+                                    ) {
+                                        TurnItem(
+                                            turn = turn, controller = controller,
+                                            expanded = turn.id in expanded,
+                                            onToggleExpand = { expanded = if (turn.id in expanded) expanded - turn.id else expanded + turn.id },
+                                            editing = editingTurn == turn.id,
+                                            onEditingChange = { editingTurn = if (it) turn.id else null },
+                                            onOpenWord = { word = it },
+                                            onReply = { replyTo = it },
+                                            onOpenImage = { imageRef = turn.id to it },
+                                            onNeedAI = { onSheet(RootSheet.Settings) },
+                                            showsActions = turn.id == turns.lastOrNull()?.id || picked,
+                                            onSelect = { selectedTurn = if (picked) null else turn.id },
+                                        )
+                                    }
+                                }
                             }
                         }
                         item(key = "bottom") { Spacer(Modifier.height(1.dp)) }
@@ -265,6 +344,11 @@ fun ConversationScreen(
                         }
                     }
                 }
+                // 同声传译收起后，在输入框上方显示“正在传译”，点一下回去
+                InterpretMiniBar(onOpen = {
+                    ModuleRouter.open(AppModule.INTERPRET, from = "mini_bar")
+                    ModuleRouter.launch = ModuleRouter.Launch.Interpret(null)
+                })
                 if (session != null) {
                     Composer(controller, session, maxHeightDp = screenHeight, onNeedAI = { onSheet(RootSheet.Settings) })
                 }
@@ -288,6 +372,7 @@ fun ConversationScreen(
     if (renaming) {
         RenameDialog(session?.title ?: "", onDismiss = { renaming = false }) { store.renameSession(sessionId, it) }
     }
+    ConfirmDelete(deletingTurn, onDismiss = { deletingTurn = null })
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
@@ -334,7 +419,7 @@ private fun EmptyState(title: String) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Tip(Icons.Rounded.TextFields, "单词、句子或整段文字都可以")
-            Tip(Icons.Rounded.AddPhotoAlternate, "点左下角的 + 拍照或选图片")
+            Tip(Icons.Rounded.PhotoCamera, "点左下角的相机拍照，或相册选图片")
             Tip(Icons.Rounded.Inventory2, "每次翻译都会保存在这个会话里")
         }
     }
@@ -346,6 +431,113 @@ private fun Tip(icon: androidx.compose.ui.graphics.vector.ImageVector, text: Str
         Icon(icon, null, tint = Lx.colors.accent, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(10.dp))
         Text(text, fontSize = 15.sp, color = Lx.colors.ink2)
+    }
+}
+
+// 筛选、时间分隔、删除
+
+/** 要显示的一轮，以及它上面要不要加时间分隔 */
+private class TurnRow(val turn: Turn, val time: String?)
+
+/** 和上一轮隔了 10 分钟以上时加时间分隔：同一天只写时间，换了一天带上日期 */
+private fun turnRows(turns: List<Turn>, filter: TurnKind?): List<TurnRow> {
+    val timeFormat = DateFormat.getTimeInstance(DateFormat.SHORT)
+    var previous: Long? = null
+    return turns.filter { filter == null || it.kind == filter }.map { turn ->
+        val before = previous
+        previous = turn.createdAt
+        if (before != null && turn.createdAt - before <= 600_000) return@map TurnRow(turn, null)
+        val time = timeFormat.format(Date(turn.createdAt))
+        val label = when {
+            before != null && sameDay(before, turn.createdAt) -> time
+            sameDay(System.currentTimeMillis(), turn.createdAt) -> "今天 $time"
+            sameDay(System.currentTimeMillis() - 86_400_000, turn.createdAt) -> "昨天 $time"
+            else -> SimpleDateFormat("M月d日", Locale.CHINA).format(Date(turn.createdAt)) + " " + time
+        }
+        TurnRow(turn, label)
+    }
+}
+
+private fun sameDay(a: Long, b: Long): Boolean {
+    val x = Calendar.getInstance().apply { timeInMillis = a }
+    val y = Calendar.getInstance().apply { timeInMillis = b }
+    return x.get(Calendar.YEAR) == y.get(Calendar.YEAR) && x.get(Calendar.DAY_OF_YEAR) == y.get(Calendar.DAY_OF_YEAR)
+}
+
+/** 筛选栏：会话里有两种以上的内容时才出现 */
+@Composable
+private fun FilterBar(turns: List<Turn>, filter: TurnKind?, onChange: (TurnKind?) -> Unit) {
+    val counts = TurnKind.entries.map { kind -> kind to turns.count { it.kind == kind } }.filter { it.second > 0 }
+    if (counts.size < 2) return
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        FilterChip("全部 ${turns.size}", on = filter == null, kind = null) { onChange(null) }
+        counts.forEach { (kind, count) ->
+            FilterChip("${kind.title} $count", on = filter == kind, kind = kind) { onChange(if (filter == kind) null else kind) }
+        }
+    }
+}
+
+/** 筛选按钮的配色和会话里对应的卡片一致：单词浅蓝、句子浅绿、图片浅灰；选中时换成同色系的深色底、白字 */
+@Composable
+private fun FilterChip(title: String, on: Boolean, kind: TurnKind?, onClick: () -> Unit) {
+    val colors = Lx.colors
+    val ink = kind?.inkColor ?: colors.ink
+    val card = kind?.cardColor ?: colors.ink3.copy(alpha = 0.12f)
+    Box(
+        Modifier.height(40.dp).clip(RoundedCornerShape(50)).clickable(onClick = onClick)
+            .semantics { selected = on },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+            color = if (on) colors.background else if (kind == null) colors.ink2 else ink,
+            modifier = Modifier.height(30.dp).background(if (on) ink else card, RoundedCornerShape(50))
+                .border(1.dp, ink.copy(alpha = if (on || kind == null) 0f else 0.18f), RoundedCornerShape(50))
+                .padding(horizontal = 12.dp).wrapContentHeight(Alignment.CenterVertically),
+        )
+    }
+}
+
+/** 左滑露出红色删除，松手后由调用方确认。没在滑的时候不画红底，透明的地方（标签、时间）不会露出红色 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TurnSwipeToDelete(onDelete: () -> Unit, content: @Composable () -> Unit) {
+    val state = rememberSwipeToDismissBoxState(confirmValueChange = { value ->
+        if (value == SwipeToDismissBoxValue.EndToStart) onDelete()
+        false
+    })
+    SwipeToDismissBox(
+        state = state,
+        enableDismissFromStartToEnd = false,
+        backgroundContent = {
+            if (state.dismissDirection == SwipeToDismissBoxValue.EndToStart) {
+                Box(
+                    Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)).background(Danger).padding(end = 22.dp),
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Rounded.Delete, null, tint = Color.White)
+                        Text("删除", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        },
+    ) { content() }
+}
+
+/** 删除确认的标题：说清楚删的是哪一条 */
+private fun deleteRequest(turn: Turn, controller: ConversationController, after: () -> Unit): PendingDelete {
+    val title = when (turn.kind) {
+        TurnKind.WORD -> "删除单词“${turn.word?.word ?: turn.source}”？"
+        TurnKind.IMAGE -> "删除这 ${turn.images.size} 张图片和译文？"
+        TurnKind.SENTENCE -> "删除这句话和它的译文？"
+    }
+    return PendingDelete(title, "删除后不能恢复。") {
+        controller.deleteTurn(turn.id)
+        after()
     }
 }
 
