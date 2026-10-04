@@ -118,3 +118,20 @@ val String.isMostlyChinese: Boolean
     }
 
 val String.strippingTags: String get() = replace(Regex("<[^>]+>"), "")
+
+/** 会话列表里的相对时间（刚刚、5 分钟前、3 小时前、昨天、10月2日）。界面是中文，不跟手机语言走 */
+fun relativeTime(time: Long, now: Long = System.currentTimeMillis()): String {
+    val minutes = (now - time) / 60_000
+    val calendar = java.util.Calendar.getInstance()
+    calendar.timeInMillis = now
+    calendar.set(java.util.Calendar.HOUR_OF_DAY, 0); calendar.set(java.util.Calendar.MINUTE, 0)
+    calendar.set(java.util.Calendar.SECOND, 0); calendar.set(java.util.Calendar.MILLISECOND, 0)
+    val startOfToday = calendar.timeInMillis
+    return when {
+        minutes < 1 -> "刚刚"
+        minutes < 60 -> "$minutes 分钟前"
+        time >= startOfToday -> "${minutes / 60} 小时前"
+        time >= startOfToday - 86_400_000 -> "昨天"
+        else -> java.text.SimpleDateFormat("M月d日", java.util.Locale.CHINA).format(java.util.Date(time))
+    }
+}

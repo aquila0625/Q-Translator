@@ -1,6 +1,5 @@
 package com.yishulabs.qtranslator.ui
 
-import android.text.format.DateUtils
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -363,7 +362,7 @@ private fun SessionRow(
                     IconButton(onClick = { onDelete(session) }) { Icon(Icons.Rounded.Delete, "删除", tint = Danger) }
                 } else {
                     Text(
-                        DateUtils.getRelativeTimeSpanString(session.updatedAt, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString(),
+                        com.yishulabs.qtranslator.core.relativeTime(session.updatedAt),
                         fontSize = 11.sp, color = colors.ink3,
                     )
                 }

@@ -104,7 +104,6 @@ import com.yishulabs.qtranslator.ui.modules.InterpretMiniBar
 import com.yishulabs.qtranslator.ui.modules.PendingDelete
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -441,7 +440,8 @@ private class TurnRow(val turn: Turn, val time: String?)
 
 /** 和上一轮隔了 10 分钟以上时加时间分隔：同一天只写时间，换了一天带上日期 */
 private fun turnRows(turns: List<Turn>, filter: TurnKind?): List<TurnRow> {
-    val timeFormat = DateFormat.getTimeInstance(DateFormat.SHORT)
+    // 界面都是中文，时间也固定用 24 小时制，不跟着手机的英文设置变成 “4:21 AM”
+    val timeFormat = SimpleDateFormat("HH:mm", Locale.CHINA)
     var previous: Long? = null
     return turns.filter { filter == null || it.kind == filter }.map { turn ->
         val before = previous
@@ -593,7 +593,7 @@ fun SearchField(value: String, onChange: (String) -> Unit, placeholder: String) 
 private fun OutlineList(turns: List<Turn>, query: String, onSelect: (String) -> Unit) {
     val colors = Lx.colors
     val q = query.trim().lowercase()
-    val format = remember { DateFormat.getTimeInstance(DateFormat.SHORT) }
+    val format = remember { SimpleDateFormat("HH:mm", Locale.CHINA) }
     if (turns.isEmpty()) {
         Text("还没有内容", color = colors.ink3, modifier = Modifier.padding(24.dp))
         return
