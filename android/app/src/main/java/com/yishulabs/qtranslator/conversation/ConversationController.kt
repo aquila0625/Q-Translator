@@ -107,10 +107,14 @@ class ConversationController(context: Context) {
     }
 
     /** 直接翻译一段文字（分享进来的、在词条里查的） */
-    fun sendText(text: String) {
+    /** audioFile / audioDuration：语音输入时录下的原声（在 filesDir/audio 下），之后可以回放 */
+    fun sendText(text: String, audioFile: String? = null, audioDuration: Double? = null) {
         val source = text.trim()
         if (source.isEmpty()) return
-        val turn = Turn(source = source, sourceIsChinese = sourceIsChinese(source), manualDirection = direction != Direction.AUTO)
+        val turn = Turn(
+            source = source, sourceIsChinese = sourceIsChinese(source), manualDirection = direction != Direction.AUTO,
+            audioFile = audioFile, audioDuration = audioDuration,
+        )
         val sessionId = currentId
         store.appendTurn(turn, sessionId)
         scope.launch { process(sessionId, turn.id) }
