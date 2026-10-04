@@ -56,6 +56,9 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate, AV
         return min(max(rate, AVSpeechUtteranceMinimumSpeechRate), AVSpeechUtteranceMaximumSpeechRate)
     }
 
+    /// 同声传译正在收音：别的朗读不能切换音频通道，否则传译会断
+    static var recordingActive = false
+
     /// 设置里选的默认口音：1 英音，2 美音
     nonisolated static var defaultAccent: Int {
         UserDefaults.standard.integer(forKey: SettingsKey.accent) == 1 ? 1 : 2
@@ -80,7 +83,7 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate, AV
         stop()
         #if os(iOS)
         // 静音开关打开时也能朗读
-        if !keepAudioSession {
+        if !keepAudioSession, !Self.recordingActive {
             try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
         }
         #endif

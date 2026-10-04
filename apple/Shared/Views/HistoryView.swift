@@ -8,6 +8,7 @@ struct HistoryView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var history = HistoryStore.shared
     @State private var starredOnly = false
+    @State private var pendingDelete: PendingDelete?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -43,9 +44,15 @@ struct HistoryView: View {
                             }
                             .contextMenu {
                                 Button(item.starred ? "从生词本移除" : "加入生词本", systemImage: item.starred ? "star.slash" : "star") {
-                                    history.toggleStar(item.text)
+                                    if item.starred {
+                                        pendingDelete = PendingDelete(title: "把“\(item.text)”从生词本移除？") { history.toggleStar(item.text) }
+                                    } else {
+                                        history.toggleStar(item.text)
+                                    }
                                 }
-                                Button("删除", systemImage: "trash", role: .destructive) { history.remove(item) }
+                                Button("删除", systemImage: "trash", role: .destructive) {
+                                    pendingDelete = PendingDelete(title: "删除记录“\(item.text)”？") { history.remove(item) }
+                                }
                             }
                         }
                     }
@@ -53,6 +60,7 @@ struct HistoryView: View {
                 .scrollIndicators(.hidden)
             }
         }
+        .confirmDelete($pendingDelete)
         .padding(asSheet ? 20 : 14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(asSheet ? Color.lxBackground : Color.clear)

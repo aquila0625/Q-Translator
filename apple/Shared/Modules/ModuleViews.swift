@@ -101,8 +101,9 @@ struct ModulePage: View {
             guard let launch else { return }
             router.launch = nil
             detail = nil
-            activity = Activity(launch: launch)
+            start(launch)
         }
+
         #if os(iOS)
         .fullScreenCover(item: $activity) { activityView($0) }
         #else
@@ -114,16 +115,24 @@ struct ModulePage: View {
     private var home: some View {
         switch module {
         case .interpret: InterpretHome(top: topBar, store: store, onOpen: { detail = .interpret($0) },
-                                       onStart: { activity = Activity(launch: .interpret(continuing: $0)) })
+                                       onStart: { start(.interpret(continuing: $0)) })
         case .face: FaceHome(top: topBar, store: store, onOpen: { detail = .dialog($0) },
-                             onStart: { activity = Activity(launch: .face) })
+                             onStart: { start(.face) })
         case .practice: PracticeHome(top: topBar, store: store, onOpen: { detail = .practice($0) },
-                                     onStart: { activity = Activity(launch: .practice(seed: $0)) })
+                                     onStart: { start(.practice(seed: $0)) })
+        }
+    }
+
+    /// 顶栏，以及传译收起后的小提示条（同声传译首页自己有“回到传译”按钮，不再显示）
+    private var topBar: some View {
+        VStack(spacing: 8) {
+            titleBar
+            if module != .interpret { InterpretMiniBar() }
         }
     }
 
     @ViewBuilder
-    private var topBar: some View {
+    private var titleBar: some View {
         if wide {
             Text(module.fullTitle).font(.title2.weight(.bold))
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -141,19 +150,27 @@ struct ModulePage: View {
         switch detail {
         case .interpret(let id):
             InterpretRecordPage(id: id, store: store, onBack: { self.detail = nil },
-                                onContinue: { activity = Activity(launch: .interpret(continuing: id)) })
+                                onContinue: { start(.interpret(continuing: id)) })
         case .dialog(let id):
             DialogRecordPage(id: id, store: store, onBack: { self.detail = nil })
         case .practice(let id):
             PracticeRecordPage(id: id, store: store, onBack: { self.detail = nil },
-                               onAgain: { seed in activity = Activity(launch: .practice(seed: seed)) })
+                               onAgain: { seed in start(.practice(seed: seed)) })
         }
+    }
+
+    /// 开始一项活动。同声传译先在全局会话里开起来（离开页面也继续），已经在传译时只是回到传译页
+    private func start(_ launch: ModuleRouter.Launch) {
+        if case .interpret(let id) = launch {
+            InterpretSession.shared.begin(continuing: id, controller: controller)
+        }
+        activity = Activity(launch: launch)
     }
 
     @ViewBuilder
     private func activityView(_ activity: Activity) -> some View {
         switch activity.launch {
-        case .interpret(let id): InterpreterView(controller: controller, continuing: id)
+        case .interpret: InterpreterView()
         case .face: FaceToFaceView(controller: controller)
         case .practice(let seed): PracticeView(controller: controller, seed: seed)
         }
@@ -223,7 +240,24 @@ struct ModuleRow: View {
 struct PendingDelete: Identifiable {
     let id = UUID()
     let title: String
+    var message: String?
     let action: () -> Void
+}
+
+extension View {
+    /// 删除前的确认对话框：pending 有值时弹出，点“删除”才执行
+    func confirmDelete(_ pending: Binding<PendingDelete?>, button: String = "删除") -> some View {
+        confirmationDialog(pending.wrappedValue?.title ?? "",
+                           isPresented: Binding(get: { pending.wrappedValue != nil }, set: { if !$0 { pending.wrappedValue = nil } }),
+                           titleVisibility: .visible) {
+            Button(button, role: .destructive) {
+                pending.wrappedValue?.action()
+                pending.wrappedValue = nil
+            }
+        } message: {
+            if let message = pending.wrappedValue?.message { Text(message) }
+        }
+    }
 }
 
 /// 记录列表：每条左滑出删除，点删除后确认
@@ -306,16 +340,26 @@ struct InterpretHome<Top: View>: View {
 
     @AppStorage("interpreter.sourceIsChinese") private var fromChinese = false
     @AppStorage(SettingsKey.interpreterSpeak) private var speak = false
+    @ObservedObject private var session = InterpretSession.shared
 
     var body: some View {
         ModuleScroll(top: top) {
             VStack(spacing: 12) {
                 HStack(spacing: 8) {
-                    chip(fromChinese ? "中 → 英" : "英 → 中", symbol: "arrow.up.arrow.down", on: false) { fromChinese.toggle() }
+                    Menu {
+                        Picker("语言", selection: $fromChinese) {
+                            Text("听英语，译成中文").tag(false)
+                            Text("听中文，译成英语").tag(true)
+                        }
+                    } label: {
+                        chipLabel(fromChinese ? "中 → 英" : "英 → 中", symbol: "chevron.down", on: false)
+                    }
+                    .buttonStyle(.plain)
+                    .menuIndicator(.hidden)
                     chip("耳机朗读", symbol: "headphones", on: speak) { speak.toggle() }
                 }
                 Button { onStart(nil) } label: {
-                    Label("开始传译", systemImage: "mic.fill")
+                    Label(session.isActive ? "回到正在进行的传译" : "开始传译", systemImage: session.isActive ? "waveform" : "mic.fill")
                         .font(.system(size: 17, weight: .bold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 28)
@@ -345,17 +389,19 @@ struct InterpretHome<Top: View>: View {
         }
     }
 
+    private func chipLabel(_ title: String, symbol: String, on: Bool) -> some View {
+        Label(title, systemImage: symbol)
+            .font(.system(size: 14, weight: .bold))
+            .foregroundStyle(on ? Color.lxBackground : AppModule.interpret.ink)
+            .padding(.horizontal, 14)
+            .frame(height: 36)
+            .background(on ? AppModule.interpret.ink : Color.lxBackground.opacity(0.8), in: .capsule)
+            .frame(minHeight: 44)
+    }
+
     private func chip(_ title: String, symbol: String, on: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: symbol)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(on ? Color.lxBackground : AppModule.interpret.ink)
-                .padding(.horizontal, 14)
-                .frame(height: 36)
-                .background(on ? AppModule.interpret.ink : Color.lxBackground.opacity(0.8), in: .capsule)
-                .frame(minHeight: 44)
-        }
-        .buttonStyle(.plain)
+        Button(action: action) { chipLabel(title, symbol: symbol, on: on) }
+            .buttonStyle(.plain)
     }
 }
 

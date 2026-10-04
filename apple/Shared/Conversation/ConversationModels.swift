@@ -30,6 +30,19 @@ struct ImageBlock: Codable, Equatable, Identifiable {
     var lines: Int
     /// 原文周围的底色（RGB），译文用同样的底色盖住原文
     var background: UInt32?
+    /// 图片被顺时针旋转过几个 90°（没转过是 nil）：译文跟着图片一起转，不用重新识别
+    var turns: Int?
+
+    /// 图片顺时针转 90° 后，这一块的位置、大小和朝向
+    func rotatedClockwise() -> ImageBlock {
+        var block = self
+        block.x = 1 - (y + height)
+        block.y = x
+        block.width = height
+        block.height = width
+        block.turns = ((turns ?? 0) + 1) % 4
+        return block
+    }
 }
 
 /// 一张图片：本机文件名、识别出的文字和它的译文

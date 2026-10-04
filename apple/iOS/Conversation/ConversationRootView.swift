@@ -64,9 +64,17 @@ struct PhoneRootView: View {
         .translationTask(controller.translator.configuration) { session in
             await controller.translator.run(session)
         }
+        // 同声传译的翻译通道挂在根界面上：离开传译页、回到桌面都继续翻译
+        .modifier(InterpretTranslationTask())
         .sheet(item: $sheet) { RootSheetContent(sheet: $0, controller: controller) }
         // 三个模块：全屏盖在翻译上，左上角返回
         .fullScreenCover(item: $router.module) { ModulePage(module: $0, controller: controller) }
+        // 打开模块页时收起会话输入框的键盘，免得它盖在模块页上
+        .onChange(of: router.module) { _, module in
+            if module != nil {
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in sheet = .settings }
         // 主屏快捷操作“新建翻译”
         .onChange(of: router.newSessionRequested) { _, requested in

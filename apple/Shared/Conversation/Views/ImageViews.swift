@@ -23,8 +23,13 @@ struct TranslatedImageView: View {
     }
 
     private func overlay(_ block: ImageBlock, in size: CGSize) -> some View {
-        let width: CGFloat = max(CGFloat(block.width) * size.width, 12)
-        let height: CGFloat = max(CGFloat(block.height) * size.height, 10)
+        let turns = (block.turns ?? 0) % 4
+        // 屏幕上这一块占的大小；转过 90° / 270° 时，文字是横着排的，排版用的宽高要对调
+        let boxWidth: CGFloat = max(CGFloat(block.width) * size.width, 12)
+        let boxHeight: CGFloat = max(CGFloat(block.height) * size.height, 10)
+        let sideways = turns % 2 == 1
+        let width = sideways ? boxHeight : boxWidth
+        let height = sideways ? boxWidth : boxHeight
         // 按原文的行高估一个字号，放不下时再缩小
         let lineHeight: CGFloat = height / CGFloat(max(block.lines, 1))
         let fontSize: CGFloat = max(7, min(40, lineHeight * 0.78))
@@ -32,6 +37,7 @@ struct TranslatedImageView: View {
                              y: CGFloat(block.y + block.height / 2) * size.height)
         return OverlayLabel(text: block.translation, fontSize: fontSize, width: width, height: height,
                             background: block.background ?? 0xFFFFFF)
+            .rotationEffect(.degrees(Double(turns) * 90))
             .position(center)
     }
 }
@@ -72,6 +78,7 @@ struct AttachmentTray: View {
     @ObservedObject var controller: ConversationController
     @State private var previewing: ConversationController.PendingImage?
     @State private var dropTarget: UUID?
+    @State private var pendingDelete: PendingDelete?
 
     var body: some View {
         ScrollView(.horizontal) {
@@ -88,6 +95,7 @@ struct AttachmentTray: View {
         .sheet(item: $previewing) { item in
             PendingImagePreview(controller: controller, item: item)
         }
+        .confirmDelete($pendingDelete)
     }
 
     private func thumbnail(_ item: ConversationController.PendingImage, index: Int) -> some View {
@@ -130,7 +138,9 @@ struct AttachmentTray: View {
             }
             .overlay(alignment: .topTrailing) {
                 Button {
-                    withAnimation(.snappy) { controller.removePending(item.id) }
+                    pendingDelete = PendingDelete(title: "删除第 \(index + 1) 张图片？", message: "这张图片还没发送，删除后要重新拍照或选择。") {
+                        withAnimation(.snappy) { controller.removePending(item.id) }
+                    }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 18))
@@ -152,6 +162,7 @@ struct PendingImagePreview: View {
     @ObservedObject var controller: ConversationController
     let item: ConversationController.PendingImage
     @Environment(\.dismiss) private var dismiss
+    @State private var pendingDelete: PendingDelete?
 
     var body: some View {
         NavigationStack {
@@ -165,13 +176,16 @@ struct PendingImagePreview: View {
                         Button("关闭") { dismiss() }
                     }
                     ToolbarItem(placement: .destructiveAction) {
-                        Button("移除", role: .destructive) {
-                            controller.removePending(item.id)
-                            dismiss()
+                        Button("删除", role: .destructive) {
+                            pendingDelete = PendingDelete(title: "删除这张图片？", message: "这张图片还没发送，删除后要重新拍照或选择。") {
+                                controller.removePending(item.id)
+                                dismiss()
+                            }
                         }
                     }
                 }
                 .inlineNavigationTitle()
+                .confirmDelete($pendingDelete)
         }
         #if os(macOS)
         .frame(minWidth: 640, minHeight: 520)

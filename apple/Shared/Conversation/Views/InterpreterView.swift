@@ -3,36 +3,34 @@ import SwiftUI
 /// 同声传译：听讲座、开会时用。持续收音，滚动显示双语字幕，上面原文、下面译文，正在说的那句是蓝底。
 /// 结束时整段字幕存成同声传译模块里的一条记录。
 struct InterpreterView: View {
-    @ObservedObject var controller: ConversationController
-    @StateObject private var interpreter: Interpreter
-    @StateObject private var translator: LiveTranslator
+    @ObservedObject private var session = InterpretSession.shared
+
+    var body: some View {
+        if let interpreter = session.interpreter, let translator = session.translator {
+            InterpreterScreen(session: session, interpreter: interpreter, translator: translator)
+        } else {
+            InterpreterClosed()
+        }
+    }
+}
+
+/// 传译已经结束（比如在别处点了结束）：把这一页关掉
+private struct InterpreterClosed: View {
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("interpreter.sourceIsChinese") private var sourceIsChinese = false
+    var body: some View { Color.clear.onAppear { dismiss() } }
+}
+
+private struct InterpreterScreen: View {
+    @ObservedObject var session: InterpretSession
+    @ObservedObject var interpreter: Interpreter
+    @ObservedObject var translator: LiveTranslator
+    @Environment(\.dismiss) private var dismiss
     /// 显示方式：0 对照，1 只看原文，2 只看译文
     @AppStorage("interpreter.display") private var display = 0
-    /// 已经保存过（点了结束）；用其他方式关掉时也要保存
-    @State private var saved = false
+    @State private var finishing = false
 
-    /// 接着录的那条记录，以及它已经有的字幕和时长
-    private let continuing: UUID?
-    private let previous: [TranscriptLine]
-    private let previousDuration: TimeInterval
-    private let continuingDirection: Bool?
-
-    /// continuing：要接着录的那条记录；nil 表示新开一条
-    init(controller: ConversationController, continuing: UUID? = nil) {
-        self.controller = controller
-        let record = continuing.flatMap { ModuleStore.shared.interpretation($0) }
-        self.continuing = record?.id
-        continuingDirection = record?.sourceIsChinese
-        previous = record?.lines ?? []
-        previousDuration = record?.duration ?? 0
-        let translator = LiveTranslator { text, chinese in await controller.translate(text, fromChinese: chinese) }
-        _translator = StateObject(wrappedValue: translator)
-        _interpreter = StateObject(wrappedValue: Interpreter { text, chinese, live in
-            await translator.translate(text, fromChinese: chinese, live: live)
-        })
-    }
+    private var previous: [TranscriptLine] { session.previous }
+    private var previousDuration: TimeInterval { session.previousDuration }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -50,22 +48,9 @@ struct InterpreterView: View {
             bottomBar
         }
         .background { WashBackground().ignoresSafeArea() }
-        // 专用的本机翻译通道，一直开着
-        .translationTask(translator.configuration) { session in await translator.run(session) }
-        .task {
-            // 继续录时沿用那条记录的方向（不改设置里的默认方向）
-            let chinese = continuingDirection ?? sourceIsChinese
-            await translator.prepare(fromChinese: chinese)
-            await interpreter.start(sourceIsChinese: chinese)
-        }
-        .onDisappear {
-            guard !saved else { return }
-            saved = true
-            Task {
-                await interpreter.stop()
-                save()
-            }
-        }
+        .onAppear { session.presented = true }
+        // 关掉这一页不等于结束：传译在后台继续，别的页面上方显示小提示条
+        .onDisappear { session.presented = false }
         #if os(macOS)
         .frame(minWidth: 560, minHeight: 720)
         #endif
@@ -75,13 +60,11 @@ struct InterpreterView: View {
 
     private var topBar: some View {
         HStack(spacing: 10) {
-            GlassIconButton(systemName: "xmark", label: "结束并保存") { finish() }
-            Button {
-                Task {
-                    await translator.prepare(fromChinese: !interpreter.sourceIsChinese)
-                    await interpreter.switchDirection()
-                    if continuing == nil { sourceIsChinese = interpreter.sourceIsChinese }
-                }
+            GlassIconButton(systemName: "chevron.down", label: "收起，传译在后台继续") { dismiss() }
+            // 点开下拉选语言，不会一碰就切换
+            Menu {
+                directionOption(fromChinese: false)
+                directionOption(fromChinese: true)
             } label: {
                 HStack(spacing: 8) {
                     if interpreter.state == .running {
@@ -89,7 +72,7 @@ struct InterpreterView: View {
                     }
                     Text("同声传译 · " + (interpreter.sourceIsChinese ? "中 → 英" : "英 → 中"))
                         .font(.callout.weight(.semibold))
-                    Image(systemName: "arrow.left.arrow.right").font(.caption.weight(.bold)).foregroundStyle(.secondary)
+                    Image(systemName: "chevron.down").font(.caption.weight(.bold)).foregroundStyle(.secondary)
                     TimelineView(.periodic(from: .now, by: 1)) { _ in
                         Text(AudioReplayButton.format(previousDuration + interpreter.elapsed))
                             .font(.callout.monospacedDigit())
@@ -101,8 +84,9 @@ struct InterpreterView: View {
                 .contentShape(.capsule)
             }
             .buttonStyle(.plain)
+            .menuIndicator(.hidden)
             .glassEffect(.regular.interactive(), in: .capsule)
-            .accessibilityLabel("翻译方向，点按切换")
+            .accessibilityLabel("听哪种语言：点开选择")
             GlassIconButton(systemName: interpreter.speakTranslations ? "headphones" : "speaker.slash",
                             label: interpreter.speakTranslations ? "关闭耳机朗读" : "用耳机朗读译文",
                             tint: interpreter.speakTranslations ? .lxAccent : .primary) {
@@ -112,6 +96,19 @@ struct InterpreterView: View {
         }
         .padding(.horizontal, 12)
         .padding(.top, 8)
+    }
+
+    /// 下拉里的一项：选了和现在不同的语言，就中途换方向（前面的字幕保留，后面按新语言识别）
+    private func directionOption(fromChinese: Bool) -> some View {
+        Button {
+            Task { await session.switchDirection(toChinese: fromChinese) }
+        } label: {
+            if interpreter.sourceIsChinese == fromChinese {
+                Label(fromChinese ? "听中文，译成英语" : "听英语，译成中文", systemImage: "checkmark")
+            } else {
+                Text(fromChinese ? "听中文，译成英语" : "听英语，译成中文")
+            }
+        }
     }
 
     // MARK: 字幕
@@ -170,7 +167,7 @@ struct InterpreterView: View {
         case .failed(let message):
             VStack(spacing: 12) {
                 Label(message, systemImage: "exclamationmark.triangle").multilineTextAlignment(.center)
-                Button("重试") { Task { await interpreter.start(sourceIsChinese: sourceIsChinese) } }
+                Button("重试") { Task { await interpreter.start(sourceIsChinese: interpreter.sourceIsChinese) } }
                     .buttonStyle(.glassProminent)
             }
             .padding(20)
@@ -242,19 +239,11 @@ struct InterpreterView: View {
     }
 
     private func finish() {
-        guard !saved else { return }
-        saved = true
+        guard !finishing else { return }
+        finishing = true
         Task {
-            await interpreter.stop()
-            save()
+            await session.finish()
             dismiss()
         }
-    }
-
-    private func save() {
-        let lines = interpreter.segments.map { TranscriptLine(original: $0.original, translation: $0.translation ?? "") }
-        ModuleStore.shared.saveInterpretation(lines, duration: interpreter.elapsed,
-                                              sourceIsChinese: interpreter.sourceIsChinese, into: continuing)
-        Speaker.shared.stop()
     }
 }

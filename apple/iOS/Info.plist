@@ -30,6 +30,10 @@
     <true/>
     <key>NSCameraUsageDescription</key>
     <string>拍下要翻译的文字。照片只在本机识别，不会上传。</string>
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>audio</string>
+    </array>
     <key>UIApplicationShortcutItems</key>
     <array>
         <dict>

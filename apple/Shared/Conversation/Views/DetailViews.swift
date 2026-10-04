@@ -84,6 +84,7 @@ struct StarredWordsView: View {
     @ObservedObject private var history = HistoryStore.shared
     @Environment(\.dismiss) private var dismiss
     @State private var path: [String] = []
+    @State private var pendingDelete: PendingDelete?
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -96,7 +97,9 @@ struct StarredWordsView: View {
                         }
                     }
                     .swipeActions {
-                        Button("移除", role: .destructive) { history.toggleStar(item.text) }
+                        Button("移除", role: .destructive) {
+                            pendingDelete = PendingDelete(title: "把“\(item.text)”从生词本移除？") { history.toggleStar(item.text) }
+                        }
                     }
                 }
             }
@@ -115,6 +118,7 @@ struct StarredWordsView: View {
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { dismiss() } } }
             #endif
         }
+        .confirmDelete($pendingDelete, button: "移除")
         #if os(macOS)
         .frame(minWidth: 560, minHeight: 640)
         #endif
@@ -123,7 +127,7 @@ struct StarredWordsView: View {
     }
 }
 
-/// 编辑一张图片：旋转后重新识别这一张，或删除它和它的译文
+/// 编辑一张图片：旋转（译文一起转）、重新识别这一张，或删除它和它的译文
 struct ImageEditView: View {
     @ObservedObject var controller: ConversationController
     @ObservedObject var store: ConversationStore
@@ -133,6 +137,7 @@ struct ImageEditView: View {
     @Environment(\.dismiss) private var dismiss
     /// 点“看原图 / 看译文”切换
     @State private var showOriginal = false
+    @State private var pendingDelete: PendingDelete?
 
     var body: some View {
         let turn = store.turn(controller.currentID, turnID)
@@ -169,9 +174,15 @@ struct ImageEditView: View {
                         Label("旋转", systemImage: "rotate.right").frame(minHeight: 44)
                     }
                     .buttonStyle(.glass)
+                    .disabled(item?.done != true)
                     Button(role: .destructive) {
-                        controller.deleteImage(turnID, imageID)
-                        dismiss()
+                        let isLast = (turn?.images.count ?? 0) <= 1
+                        pendingDelete = PendingDelete(
+                            title: "删除这张图片和它的译文？",
+                            message: isLast ? "这是这一轮里的最后一张，整轮翻译会一起删除。" : nil) {
+                            controller.deleteImage(turnID, imageID)
+                            dismiss()
+                        }
                     } label: {
                         Label("删除这张", systemImage: "trash").frame(minHeight: 44)
                     }
@@ -190,6 +201,7 @@ struct ImageEditView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .confirmDelete($pendingDelete)
         #if os(macOS)
         .frame(minWidth: 640, minHeight: 560)
         #endif

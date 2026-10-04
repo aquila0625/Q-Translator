@@ -53,6 +53,10 @@ final class VoiceInput: ObservableObject {
 
     /// 开始听。preferred 为 nil 时用上次用的语言
     func start(preferred: Language?) async {
+        if Speaker.recordingActive {
+            state = .failed("同声传译正在收音，先结束传译再用语音输入")
+            return
+        }
         guard state != .listening else { return }
         if let preferred { language = preferred }
         guard await requestPermissions() else {

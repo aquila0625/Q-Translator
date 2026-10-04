@@ -97,6 +97,8 @@ struct WideRootView: View {
         .translationTask(controller.translator.configuration) { session in
             await controller.translator.run(session)
         }
+        // 同声传译的翻译通道挂在根界面上：离开传译页、回到桌面都继续翻译
+        .modifier(InterpretTranslationTask())
         .sheet(item: $sheet) { RootSheetContent(sheet: $0, controller: controller) }
         .appAppearance()
         .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in sheet = .settings }

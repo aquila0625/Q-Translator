@@ -197,7 +197,8 @@ struct PracticeView: View {
 
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 10) {
+                    // 不用懒加载：句子不多，懒加载估算高度不准，滚动会停在半路
+                    VStack(alignment: .leading, spacing: 10) {
                         ForEach(record.lines) { line in
                             if line.isMine { mine(line) } else { partner(line) }
                         }
@@ -224,8 +225,12 @@ struct PracticeView: View {
                     .frame(maxWidth: .infinity)
                 }
                 .scrollDismissesKeyboard(.interactively)
-                .onChange(of: record.lines.count) { withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
-                .onChange(of: thinking) { withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
+                .defaultScrollAnchor(.bottom)
+                .onChange(of: record.lines.count) { scrollToEnd(proxy) }
+                .onChange(of: thinking) { scrollToEnd(proxy) }
+                .onChange(of: error) { scrollToEnd(proxy) }
+                .onChange(of: showChinese) { scrollToEnd(proxy) }
+                .onChange(of: voice.isListening) { scrollToEnd(proxy) }
             }
             .onChange(of: speak) { if !speak { Speaker.shared.stop() } }
             // 语音聊天：轮到我说时自动开始听
@@ -254,6 +259,15 @@ struct PracticeView: View {
             }
 
             composer
+        }
+    }
+
+    /// 滚到最新一句。新气泡是带动画进来的，第一次滚动时它还没长到最终高度，所以稍后再滚一次
+    private func scrollToEnd(_ proxy: ScrollViewProxy) {
+        withAnimation(.snappy) { proxy.scrollTo("bottom", anchor: .bottom) }
+        Task {
+            try? await Task.sleep(for: .milliseconds(350))
+            withAnimation(.snappy) { proxy.scrollTo("bottom", anchor: .bottom) }
         }
     }
 

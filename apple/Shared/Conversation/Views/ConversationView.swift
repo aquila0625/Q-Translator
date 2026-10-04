@@ -247,9 +247,13 @@ struct ConversationView: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            if let session {
-                ComposerView(controller: controller, session: session, focused: $composerFocused,
-                             screenHeight: screenHeight, onNeedAI: onSettings)
+            VStack(spacing: 8) {
+                // 同声传译收起后，在输入框上方显示“正在传译”，点一下回去
+                InterpretMiniBar()
+                if let session {
+                    ComposerView(controller: controller, session: session, focused: $composerFocused,
+                                 screenHeight: screenHeight, onNeedAI: onSettings)
+                }
             }
         }
         .sheet(isPresented: $showOutline) {

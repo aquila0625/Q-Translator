@@ -265,22 +265,15 @@ final class ConversationController: ObservableObject {
         Task { await process(sessionID, turnID) }
     }
 
-    /// 把图片顺时针转 90°，然后只重新识别和翻译这一张
+    /// 把图片顺时针转 90°：译文跟着图片一起转，不用重新识别（转歪了的照片想按新方向重新识别，点“重新识别”）
     func rotateImage(_ turnID: UUID, _ imageID: UUID) {
-        guard let turn = store.turn(currentID, turnID), let item = turn.images.first(where: { $0.id == imageID }),
+        guard let turn = store.turn(currentID, turnID), let item = turn.images.first(where: { $0.id == imageID }), item.done,
               let image = store.image(named: item.fileName) else { return }
         store.replaceImageFile(item.fileName, with: image.rotatedClockwise())
-        let sessionID = currentID
-        store.updateTurn(sessionID, turnID) {
-            if let i = $0.images.firstIndex(where: { $0.id == imageID }) {
-                $0.images[i].recognized = ""
-                $0.images[i].translation = ""
-                $0.images[i].blocks = nil
-                $0.images[i].done = false
-            }
-            $0.state = .working
+        store.updateTurn(currentID, turnID) {
+            guard let i = $0.images.firstIndex(where: { $0.id == imageID }) else { return }
+            $0.images[i].blocks = $0.images[i].blocks?.map { $0.rotatedClockwise() }
         }
-        Task { await process(sessionID, turnID) }
     }
 
     // MARK: 翻译
