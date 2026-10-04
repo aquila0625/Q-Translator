@@ -40,14 +40,16 @@ final class InterpretSession: ObservableObject {
         Task {
             await translator.prepare(fromChinese: chinese)
             await interpreter.start(sourceIsChinese: chinese)
+            // 后台把另一种语言的识别模型也准备好，中途切换不用等
+            await interpreter.prepareOtherLanguage()
         }
     }
 
     /// 换方向：前面的字幕保留，后面按新语言识别
     func switchDirection(toChinese: Bool) async {
         guard let interpreter, let translator, interpreter.sourceIsChinese != toChinese else { return }
-        await translator.prepare(fromChinese: toChinese)
         await interpreter.switchDirection()
+        await translator.prepare(fromChinese: toChinese)
         if continuing == nil { UserDefaults.standard.set(interpreter.sourceIsChinese, forKey: "interpreter.sourceIsChinese") }
     }
 

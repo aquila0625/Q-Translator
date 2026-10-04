@@ -156,26 +156,17 @@ struct ImageEditView: View {
                 } else {
                     Spacer()
                 }
-                HStack(spacing: 12) {
+                // 四个按钮等宽，图标在上、文字在下，窄屏也不换行
+                HStack(spacing: 8) {
                     // 点一下切换原图和译文
-                    Button {
+                    toolButton(showOriginal ? "看译文" : "看原图", showOriginal ? "character.book.closed" : "photo") {
                         withAnimation(.easeOut(duration: 0.15)) { showOriginal.toggle() }
-                    } label: {
-                        Label(showOriginal ? "看译文" : "看原图", systemImage: showOriginal ? "character.book.closed" : "photo")
-                            .frame(minHeight: 44)
                     }
-                    .buttonStyle(.glass)
-                    Button { controller.reprocessImage(turnID, imageID) } label: {
-                        Label("重新识别", systemImage: "arrow.clockwise").frame(minHeight: 44)
-                    }
-                    .buttonStyle(.glass)
-                    .disabled(item?.done != true)
-                    Button { controller.rotateImage(turnID, imageID) } label: {
-                        Label("旋转", systemImage: "rotate.right").frame(minHeight: 44)
-                    }
-                    .buttonStyle(.glass)
-                    .disabled(item?.done != true)
-                    Button(role: .destructive) {
+                    toolButton("重新识别", "arrow.clockwise") { controller.reprocessImage(turnID, imageID) }
+                        .disabled(item?.done != true)
+                    toolButton("旋转", "rotate.right") { controller.rotateImage(turnID, imageID) }
+                        .disabled(item?.done != true)
+                    toolButton("删除", "trash", role: .destructive) {
                         let isLast = (turn?.images.count ?? 0) <= 1
                         pendingDelete = PendingDelete(
                             title: "删除这张图片和它的译文？",
@@ -183,11 +174,9 @@ struct ImageEditView: View {
                             controller.deleteImage(turnID, imageID)
                             dismiss()
                         }
-                    } label: {
-                        Label("删除这张", systemImage: "trash").frame(minHeight: 44)
                     }
-                    .buttonStyle(.glass)
                 }
+                .padding(.horizontal, 12)
                 .padding(.bottom, 12)
             }
             .background(Color.black.ignoresSafeArea())
@@ -206,5 +195,19 @@ struct ImageEditView: View {
         .frame(minWidth: 640, minHeight: 560)
         #endif
         .onChange(of: item == nil) { if item == nil { dismiss() } }
+    }
+
+    private func toolButton(_ title: String, _ symbol: String, role: ButtonRole? = nil, action: @escaping () -> Void) -> some View {
+        Button(role: role, action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: symbol).font(.system(size: 18, weight: .medium))
+                Text(title).font(.caption.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .foregroundStyle(role == .destructive ? Color.red : Color.white)
+            .frame(maxWidth: .infinity, minHeight: 58)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 16))
     }
 }

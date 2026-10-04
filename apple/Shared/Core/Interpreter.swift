@@ -47,6 +47,8 @@ final class Interpreter: ObservableObject {
     /// 设备不支持新一代识别模型时，退回系统的老识别接口
     private var legacyRecognizer: SFSpeechRecognizer?
     private var legacyTask: SFSpeechRecognitionTask?
+    /// 每换一次识别器加一；旧识别任务晚到的回调按这个丢掉
+    private var legacyGeneration = 0
     /// 正在用的识别方式，显示给用户看
     @Published private(set) var engineName = ""
     /// 这一段识别结果里已经切出去的字（只数文字和数字，不数标点和空格）。
@@ -127,12 +129,76 @@ final class Interpreter: ObservableObject {
         #endif
     }
 
-    /// 中途换方向：前面的字幕保留，后面按新语言识别
+    /// 中途换方向：前面的字幕保留，后面按新语言识别。
+    /// 录音不停，只换识别器：正在说的半句直接收进字幕，不等旧的识别器收尾，所以很快
     func switchDirection() async {
         let wasRunning = state == .running
-        await stop()
-        await start(sourceIsChinese: !sourceIsChinese)
-        if !wasRunning { pause() }
+        let wasPaused = state == .paused
+        guard wasRunning || wasPaused else { return }
+        if !live.trimmed.isEmpty { emit(live) }
+        live = ""
+        stopRecognition()
+        sourceIsChinese.toggle()
+        state = .preparing("正在切换到\(sourceIsChinese ? "中文" : "英语")…")
+        do {
+            try await startRecognition()
+            // 新旧识别要的声音格式可能不一样：重装录音回调，音频通道不用关
+            engine.stop()
+            try installTap()
+            engine.prepare()
+            if wasRunning {
+                try engine.start()
+                lastAudioAt = Date()
+                state = .running
+            } else {
+                state = .paused
+            }
+        } catch {
+            state = .failed("切换语言失败：\(error.localizedDescription)")
+        }
+    }
+
+    /// 马上停掉现在的识别器（不等它把最后一句收完）
+    private func stopRecognition() {
+        sink.setContinuation(nil)
+        sink.setLegacyRequest(nil)
+        input?.finish()
+        input = nil
+        resultsTask?.cancel()
+        resultsTask = nil
+        legacyGeneration += 1
+        legacyTask?.cancel()
+        legacyTask = nil
+        legacyRecognizer = nil
+        let old = analyzer
+        analyzer = nil
+        transcriber = nil
+        Task { await old?.cancelAndFinishNow() }
+    }
+
+    /// 提前把另一种语言的识别模型准备好（登记、需要时下载），中途切换语言时不用再等
+    func prepareOtherLanguage() async {
+        let id = sourceIsChinese ? "en-US" : "zh-CN"
+        guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: Locale(identifier: id)) else { return }
+        let transcriber = SpeechTranscriber(locale: locale, transcriptionOptions: [], reportingOptions: [.volatileResults],
+                                            attributeOptions: [])
+        guard (try? await reserve(locale)) != nil else { return }
+        if let request = try? await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
+            try? await request.downloadAndInstall()
+        }
+    }
+
+    /// 向系统登记要用这种语言；登记数满了就释放一个不是中文、也不是英语的
+    private func reserve(_ locale: Locale) async throws {
+        let reserved = await AssetInventory.reservedLocales
+        guard !reserved.contains(where: { $0.identifier(.bcp47) == locale.identifier(.bcp47) }) else { return }
+        if reserved.count >= AssetInventory.maximumReservedLocales {
+            let keep = ["en", "zh"]
+            if let old = reserved.first(where: { !keep.contains($0.language.languageCode?.identifier ?? "") }) ?? reserved.first {
+                await AssetInventory.release(reservedLocale: old)
+            }
+        }
+        _ = try await AssetInventory.reserve(locale: locale)
     }
 
     // MARK: 识别
@@ -146,18 +212,12 @@ final class Interpreter: ObservableObject {
         let transcriber = SpeechTranscriber(locale: locale, transcriptionOptions: [], reportingOptions: [.volatileResults],
                                             attributeOptions: [])
         // 先向系统登记要用这种语言（同时登记的语言有上限，满了就释放掉不用的）
-        let reserved = await AssetInventory.reservedLocales
-        if !reserved.contains(where: { $0.identifier(.bcp47) == locale.identifier(.bcp47) }) {
-            if reserved.count >= AssetInventory.maximumReservedLocales, let old = reserved.first {
-                await AssetInventory.release(reservedLocale: old)
-            }
-            do {
-                _ = try await AssetInventory.reserve(locale: locale)
-            } catch {
-                log.error("interpreter: reserve failed \(error.localizedDescription, privacy: .public)")
-                try await startLegacyRecognition()
-                return
-            }
+        do {
+            try await reserve(locale)
+        } catch {
+            log.error("interpreter: reserve failed \(error.localizedDescription, privacy: .public)")
+            try await startLegacyRecognition()
+            return
         }
         let status = await AssetInventory.status(forModules: [transcriber])
         if status == .unsupported {
@@ -185,6 +245,7 @@ final class Interpreter: ObservableObject {
         resultsTask = Task { [weak self] in
             do {
                 for try await result in transcriber.results {
+                    if Task.isCancelled { break }
                     let text = String(result.text.characters)
                     await self?.handle(text, isFinal: result.isFinal)
                 }
@@ -215,17 +276,18 @@ final class Interpreter: ObservableObject {
         if recognizer.supportsOnDeviceRecognition { request.requiresOnDeviceRecognition = true }
         sink.setLegacyRequest(request)
         emittedLetters = 0
+        let generation = legacyGeneration
         legacyTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
             let text = result?.bestTranscription.formattedString
             let isFinal = (result?.isFinal ?? false) || error != nil
             Task { @MainActor in
-                guard let self, self.legacyRecognizer != nil else { return }
+                guard let self, self.legacyRecognizer != nil, self.legacyGeneration == generation else { return }
                 if let text { self.handle(text, isFinal: isFinal) } else if isFinal, !self.live.isEmpty { self.handle(self.live, isFinal: true) }
                 // 这一次识别结束了：还在同传就接着听
                 if isFinal, self.state == .running || self.state == .paused {
                     // 稍等一下再接着听，避免没声音时反复报错、反复重开
                     try? await Task.sleep(for: .milliseconds(300))
-                    if self.legacyRecognizer != nil { self.startLegacyTask() }
+                    if self.legacyRecognizer != nil, self.legacyGeneration == generation { self.startLegacyTask() }
                 }
             }
         }
