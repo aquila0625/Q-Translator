@@ -50,7 +50,7 @@ struct ComposerView: View {
                 defer { if scoped { url.stopAccessingSecurityScopedResource() } }
                 return NSImage(contentsOf: url)
             }
-            controller.attachImages(images)
+            controller.attachImages(images, source: "files")
         }
         .onReceive(NotificationCenter.default.publisher(for: .focusInput)) { _ in focused.wrappedValue = true }
     }
@@ -166,7 +166,7 @@ struct ComposerView: View {
         let board = NSPasteboard.general
         if let images = board.readObjects(forClasses: [NSImage.self]) as? [NSImage], !images.isEmpty,
            (board.string(forType: .string)?.trimmed ?? "").isEmpty {
-            controller.attachImages(images)
+            controller.attachImages(images, source: "paste")
         } else if let text = board.string(forType: .string) {
             controller.draft += text
             focused.wrappedValue = true

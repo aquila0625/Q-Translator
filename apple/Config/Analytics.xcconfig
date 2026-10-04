@@ -1,0 +1,9 @@
+// 友盟统计的 AppKey。仓库里是空的：空着就不发统计。
+// 自己的 AppKey 写在同目录下的 Local.xcconfig（不提交），例如：
+//   UMENG_APPKEY_IPHONE = xxxxxxxx
+//   UMENG_APPKEY_IPAD = xxxxxxxx
+//   UMENG_APPKEY_MAC = xxxxxxxx
+UMENG_APPKEY_IPHONE =
+UMENG_APPKEY_IPAD =
+UMENG_APPKEY_MAC =
+#include? "Local.xcconfig"

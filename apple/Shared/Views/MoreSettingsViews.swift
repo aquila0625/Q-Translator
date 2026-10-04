@@ -257,6 +257,7 @@ struct SpeechVoicesView: View {
                     }
                     hint = nil
                     aiVoice = voice.id
+                    Analytics.track(.settingsVoice, ["type": "ai", "voice": voice.id])
                     Speaker.shared.playAI(.text(englishSample + " " + chineseSample, isChinese: false), voice: voice.id)
                 }
                 .opacity(AIVoice.apiKey == nil ? 0.45 : 1)
@@ -287,6 +288,7 @@ struct SpeechVoicesView: View {
             }
             hint = nil
             selection.wrappedValue = voice.id
+            Analytics.track(.settingsVoice, ["type": "system", "voice": voice.name])
             playSystem(sample, voice: best)
         }
     }
@@ -351,5 +353,6 @@ struct SpeechSpeedPicker: View {
         } label: {
             Text("朗读速度")
         }
+        .onChange(of: speed) { _, value in Analytics.track(.settingsSpeed, ["speed": Speaker.speedLabel(value)]) }
     }
 }

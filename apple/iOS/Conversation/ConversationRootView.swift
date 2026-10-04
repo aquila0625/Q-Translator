@@ -16,6 +16,7 @@ struct ConversationRootView: View {
             }
         }
         .appAppearance()
+        .analyticsConsentPrompt()
     }
 }
 

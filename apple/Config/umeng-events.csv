@@ -1,0 +1,29 @@
+事件ID,事件名称,事件类型,属性（参数）说明
+word_lookup,查单词,多参数类型事件,direction 方向 en2zh/zh2en；voice 是否语音输入 yes/no；ai AI优化 on/off
+text_translate,翻译句子,多参数类型事件,direction 方向；voice 是否语音输入；ai AI优化；length 长度档位 ≤40/41-200/201-1000/>1000
+image_translate,图片翻译,多参数类型事件,source 来源 camera/photos/files/paste/drop；count 张数档位；ai AI优化；instruction 是否写了要求 yes/no
+image_rotate,旋转图片,多参数类型事件,无
+image_recognize_again,图片重新识别,多参数类型事件,无
+voice_input,语音输入,多参数类型事件,language 识别语言 en-US/zh-CN；auto_send 说完自动翻译 yes/no；seconds 时长档位
+ai_optimize,AI 优化,多参数类型事件,trigger 触发 auto/manual；provider 服务商 claude/openai/deepseek/custom
+reply_write,写回复,多参数类型事件,kind 类型 message/email；mode 方式 points/draft
+speak,朗读,多参数类型事件,voice 声音 youdao/ai/system；language en/zh
+word_star,加入生词本,多参数类型事件,无
+session_new,新建会话,多参数类型事件,in_scene 是否在场景里 yes/no
+scene_new,新建场景,多参数类型事件,无
+module_open,打开模块,多参数类型事件,module 模块 interpret/face/practice；from 入口 drawer/shortcut/menu/mini_bar
+quick_action,主屏快捷操作,多参数类型事件,type 类型 interpret/face/practice/new
+interpret_start,开始同声传译,多参数类型事件,direction 方向；continue 是否继续录 yes/no；speak 耳机朗读 on/off
+interpret_finish,结束同声传译,多参数类型事件,minutes 分钟档位；sentences 句数档位；background 是否收起或后台 yes/no
+interpret_switch,传译切换语言,多参数类型事件,to 切换后的方向
+interpret_minimize,传译收起到后台,多参数类型事件,无
+interpret_summary,传译 AI 要点,多参数类型事件,无
+face_start,开始面对面对话,多参数类型事件,无
+face_finish,结束面对面对话,多参数类型事件,lines 句数档位
+practice_start,开始场景练习,多参数类型事件,scene 场景（预设名称或“自定义”）；level 难度；hands_free 语音聊天 yes/no
+practice_reply,练习中回答一句,多参数类型事件,input 方式 text/voice/voice_chat
+practice_finish,结束场景练习,多参数类型事件,lines 我说的句数档位；corrections 改正处数档位
+practice_hands_free,切换语音聊天,多参数类型事件,on 打开 yes/关闭 no
+settings_ai_provider,设置 AI 服务商,多参数类型事件,provider 服务商
+settings_voice,选择音色,多参数类型事件,type ai/system；voice 音色名
+settings_speed,调整朗读速度,多参数类型事件,speed 速度

@@ -112,11 +112,11 @@ private struct Pickers: ViewModifier {
                         images.append(image)
                     }
                 }
-                controller.attachImages(images)
+                controller.attachImages(images, source: "photos")
             }
         }
         .fullScreenCover(isPresented: $showCamera) {
-            CameraPicker { controller.attachImages([$0]) }.ignoresSafeArea()
+            CameraPicker { controller.attachImages([$0], source: "camera") }.ignoresSafeArea()
         }
         .fileImporter(isPresented: $showFiles, allowedContentTypes: [.image], allowsMultipleSelection: true) { result in
             guard case .success(let urls) = result else { return }
@@ -125,7 +125,7 @@ private struct Pickers: ViewModifier {
                 defer { if scoped { url.stopAccessingSecurityScopedResource() } }
                 return UIImage(contentsOfFile: url.path)
             }
-            controller.attachImages(images)
+            controller.attachImages(images, source: "files")
         }
         .sheet(isPresented: $showFullEditor) {
             NavigationStack {
@@ -252,7 +252,7 @@ extension ComposerView {
     private func paste() {
         let board = UIPasteboard.general
         if board.hasImages, let images = board.images, !images.isEmpty {
-            controller.attachImages(images)
+            controller.attachImages(images, source: "paste")
         } else if let text = board.string {
             controller.draft += text
             focused.wrappedValue = true

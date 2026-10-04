@@ -36,13 +36,16 @@ struct FaceToFaceView: View {
         .background(Color.lxBackground)
         .translationTask(toEnglish.configuration) { session in await toEnglish.run(session) }
         .translationTask(toChinese.configuration) { session in await toChinese.run(session) }
+        .analyticsPage("面对面对话")
         .task {
+            Analytics.track(.faceStart)
             await toEnglish.prepare(fromChinese: true)
             await toChinese.prepare(fromChinese: false)
         }
         .onDisappear {
             if voice.isListening { voice.cancel() }
             Speaker.shared.stop()
+            Analytics.track(.faceFinish, ["lines": Analytics.bucket(lines.count, [0, 4, 10, 30])])
             ModuleStore.shared.addDialog(lines)
         }
         #if os(macOS)

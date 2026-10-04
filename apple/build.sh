@@ -5,6 +5,8 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# iOS 版要用友盟统计 SDK（不在仓库里），没下载过就先下载
+./Scripts/fetch_umeng.sh >/dev/null || echo "友盟 SDK 下载失败：Mac 版不受影响，iOS 版需要先运行 Scripts/fetch_umeng.sh"
 xcodegen generate --quiet
 # -quiet 模式下 xcodebuild 会多打两行无害的 “exit code 0” 提示，过滤掉
 set +e

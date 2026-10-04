@@ -14,6 +14,7 @@ struct SettingsView: View {
     @AppStorage("voice.language") private var voiceLanguage = "en-US"
 
     @ObservedObject private var usage = UsageStore.shared
+    @State private var analyticsOn = Analytics.consent == true
     @State private var testing = false
     @State private var testResult: String?
 
@@ -42,6 +43,7 @@ struct SettingsView: View {
                     Picker("服务商", selection: $ai.provider) {
                         ForEach(AIProvider.allCases) { Text($0.title).tag($0) }
                     }
+                    .onChange(of: ai.provider) { _, provider in Analytics.track(.settingsAIProvider, ["provider": provider.rawValue]) }
                     SecureField("API Key", text: $ai.apiKey)
                         .textContentType(.password)
                         .autocorrectionDisabled()
@@ -141,6 +143,17 @@ struct SettingsView: View {
                     Text("先用离线和免费的来源，AI 只在你填了 Key 之后作为补充。")
                 }
 
+                if Analytics.isAvailable {
+                    Section {
+                        Toggle("发送匿名使用统计", isOn: $analyticsOn)
+                            .onChange(of: analyticsOn) { _, on in Analytics.consent = on }
+                    } header: {
+                        Text("隐私")
+                    } footer: {
+                        Text("只统计用了哪些功能，帮助改进快译；不包含你输入的文字、图片和录音。统计由友盟+处理。")
+                    }
+                }
+
                 Section("关于") {
                     LabeledContent("版本", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")
                     Link("源代码（MIT 许可）", destination: URL(string: "https://github.com/aquila0625/Q-Translator")!)
@@ -148,6 +161,7 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
             .navigationTitle("设置")
+            .analyticsPage("设置")
             .inlineNavigationTitle()
             #if os(macOS)
             .toolbar {

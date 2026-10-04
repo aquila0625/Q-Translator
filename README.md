@@ -79,13 +79,28 @@ This writes `dist/Q-Translator-<version>.dmg`. For a download that other people 
 
 ```bash
 cd apple
+./Scripts/fetch_umeng.sh
 QTRANSLATOR_TEAM_ID=YOUR_TEAM_ID xcodegen generate
 open QTranslator.xcodeproj
 ```
 
+`fetch_umeng.sh` downloads the Umeng analytics SDK into `apple/Vendor/` (it is not checked in).
+
 Pick the `QTranslator-iOS` scheme and run it on a simulator or a device. `QTRANSLATOR_TEAM_ID` is your Apple developer team ID and is only needed for real devices; you can also leave it out and choose the team in Xcode.
 
 Apple's on-device translation does not run in the iOS Simulator, so sentences fall back to the online translator there.
+
+### Usage analytics
+
+The iPhone and iPad app can send anonymous usage statistics (which features are used, never the text, images or audio you translate) through [Umeng](https://www.umeng.com/), and only after the user agrees on first launch; it can be turned off in Settings. The repository contains no Umeng app keys, so builds from source send nothing. To use your own, put them in `apple/Config/Local.xcconfig` (ignored by git):
+
+```
+UMENG_APPKEY_IPHONE = ...
+UMENG_APPKEY_IPAD = ...
+UMENG_APPKEY_MAC = ...
+```
+
+The custom events are listed in `apple/Config/umeng-events.csv`. Umeng has no macOS SDK at the moment, so the Mac app does not send statistics yet.
 
 ### Android
 

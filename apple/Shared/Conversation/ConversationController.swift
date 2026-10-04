@@ -24,6 +24,9 @@ final class ConversationController: ObservableObject {
     /// 语音输入留下的原声，跟着下一次发送的文字一起保存；把输入框清空就丢掉
     @Published var pendingAudio: (name: String, duration: Double)?
 
+    /// 待发图片最近一次的来源（统计用）
+    private var pendingImageSource = "other"
+
     struct PendingImage: Identifiable {
         let id = UUID()
         let image: PlatformImage
@@ -56,6 +59,7 @@ final class ConversationController: ObservableObject {
             return
         }
         let session = store.createSession(title: title, sceneID: sceneID, aiEnabled: aiEnabled ?? AISettings.shared.autoCalibrate)
+        Analytics.track(.sessionNew, ["in_scene": sceneID == nil ? "no" : "yes"])
         select(session.id)
     }
 
@@ -131,6 +135,9 @@ final class ConversationController: ObservableObject {
     func finishVoice() {
         let result = VoiceInput.shared.stop()
         guard !result.text.isEmpty else { return }
+        Analytics.track(.voiceInput, ["language": VoiceInput.shared.language.rawValue,
+                                      "auto_send": UserDefaults.standard.bool(forKey: SettingsKey.voiceAutoSend) ? "yes" : "no",
+                                      "seconds": Analytics.bucket(Int(result.duration), [5, 15, 60])])
         if let old = pendingAudio, draft.trimmed.isEmpty { ConversationStore.deleteMediaFile(old.name) }
         draft = draft.trimmed.isEmpty ? result.text : draft.trimmed + " " + result.text
         if let audio = result.audio { pendingAudio = (audio, result.duration) }
@@ -142,8 +149,11 @@ final class ConversationController: ObservableObject {
     }
 
     /// 选好的图片先放在输入框上方，不直接发送
-    func attachImages(_ images: [PlatformImage]) {
+    /// source：图片从哪里来（camera / photos / files / paste / drop / other），只用于统计
+    func attachImages(_ images: [PlatformImage], source: String = "other") {
+        guard !images.isEmpty else { return }
         pendingImages += images.map { PendingImage(image: $0) }
+        pendingImageSource = source
     }
 
     func removePending(_ id: UUID) {
@@ -165,6 +175,9 @@ final class ConversationController: ObservableObject {
             let images = pendingImages.map(\.image)
             pendingImages = []
             draft = ""
+            Analytics.track(.imageTranslate, ["source": pendingImageSource, "count": Analytics.bucket(images.count, [1, 3, 6]),
+                                              "ai": current?.aiEnabled == true ? "on" : "off",
+                                              "instruction": instruction.isEmpty ? "no" : "yes"])
             sendImages(images, instruction: instruction.isEmpty ? nil : instruction)
             return
         }
@@ -174,6 +187,13 @@ final class ConversationController: ObservableObject {
         pendingAudio = nil
         draft = ""
         var turn = Turn(source: text, sourceIsChinese: sourceIsChinese(text), manualDirection: direction != .auto)
+        let attributes = ["direction": Analytics.direction(fromChinese: turn.sourceIsChinese), "voice": audio == nil ? "no" : "yes",
+                          "ai": current?.aiEnabled == true ? "on" : "off"]
+        if Self.isWordLike(text) {
+            Analytics.track(.wordLookup, attributes)
+        } else {
+            Analytics.track(.textTranslate, attributes.merging(["length": Analytics.bucket(text.count, [40, 200, 1000])]) { $1 })
+        }
         turn.audioFile = audio?.name
         turn.audioDuration = audio?.duration
         let sessionID = currentID
@@ -250,6 +270,7 @@ final class ConversationController: ObservableObject {
 
     /// 只重新识别和翻译这一张图片（识别失败、没识别到文字或翻译不完整时用）
     func reprocessImage(_ turnID: UUID, _ imageID: UUID) {
+        Analytics.track(.imageRecognizeAgain)
         let sessionID = currentID
         store.updateTurn(sessionID, turnID) {
             if let i = $0.images.firstIndex(where: { $0.id == imageID }) {
@@ -269,6 +290,7 @@ final class ConversationController: ObservableObject {
     func rotateImage(_ turnID: UUID, _ imageID: UUID) {
         guard let turn = store.turn(currentID, turnID), let item = turn.images.first(where: { $0.id == imageID }), item.done,
               let image = store.image(named: item.fileName) else { return }
+        Analytics.track(.imageRotate)
         store.replaceImageFile(item.fileName, with: image.rotatedClockwise())
         store.updateTurn(currentID, turnID) {
             guard let i = $0.images.firstIndex(where: { $0.id == imageID }) else { return }
@@ -432,6 +454,7 @@ final class ConversationController: ObservableObject {
             $0.isOptimizing = true
             $0.aiError = nil
         }
+        Analytics.track(.aiOptimize, ["trigger": force ? "manual" : "auto", "provider": AISettings.shared.provider.rawValue])
         do {
             let config = AIClient.currentConfig
             let response = try await AITasks.calibrate(source: sentence.source, machine: sentence.translation,

@@ -79,7 +79,7 @@ struct WideRootView: View {
                     .onDrop(of: [.image, .fileURL], isTargeted: $dropTargeted) { providers in
                         Task {
                             let images = await ImageDrop.load(providers)
-                            if !images.isEmpty { controller.attachImages(images) }
+                            if !images.isEmpty { controller.attachImages(images, source: "drop") }
                         }
                         return true
                     }
@@ -101,6 +101,9 @@ struct WideRootView: View {
         .modifier(InterpretTranslationTask())
         .sheet(item: $sheet) { RootSheetContent(sheet: $0, controller: controller) }
         .appAppearance()
+        #if os(macOS)
+        .analyticsConsentPrompt()
+        #endif
         .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in sheet = .settings }
     }
 }

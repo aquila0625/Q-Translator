@@ -1,4 +1,4 @@
-# XcodeGen spec. Run `xcodegen generate` in this folder to create QTranslator.xcodeproj.
+# XcodeGen spec. Run `Scripts/fetch_umeng.sh` once, then `xcodegen generate` in this folder to create QTranslator.xcodeproj.
 name: QTranslator
 options:
   deploymentTarget:
@@ -28,6 +28,22 @@ targets:
         # 真机安装需要你自己的 Apple 开发团队 ID：QTRANSLATOR_TEAM_ID=XXXXXXXXXX xcodegen generate
         DEVELOPMENT_TEAM: ${QTRANSLATOR_TEAM_ID}
         CODE_SIGN_STYLE: Automatic
+        # 友盟统计是静态库，里面有 Objective-C 分类
+        OTHER_LDFLAGS: $(inherited) -ObjC
+    # 友盟 AppKey 在 Config/Local.xcconfig（不提交）；没有就不发统计
+    configFiles:
+      Debug: Config/Analytics.xcconfig
+      Release: Config/Analytics.xcconfig
+    # 友盟统计 SDK：先运行 Scripts/fetch_umeng.sh 下载
+    dependencies:
+      - framework: Vendor/Umeng/UMCommon.xcframework
+        embed: false
+      - framework: Vendor/Umeng/UMDevice.xcframework
+        embed: false
+      - sdk: CoreTelephony.framework
+      - sdk: SystemConfiguration.framework
+      - sdk: libsqlite3.tbd
+      - sdk: libz.tbd
     scheme: {}
   QTranslator-macOS:
     type: application
@@ -40,4 +56,7 @@ targets:
         INFOPLIST_FILE: macOS/Info.plist
         CODE_SIGN_IDENTITY: "-"
         ENABLE_HARDENED_RUNTIME: NO
+    configFiles:
+      Debug: Config/Analytics.xcconfig
+      Release: Config/Analytics.xcconfig
     scheme: {}

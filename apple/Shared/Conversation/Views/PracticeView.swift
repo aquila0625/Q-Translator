@@ -43,8 +43,12 @@ struct PracticeView: View {
             }
         }
         .background { WashBackground().ignoresSafeArea() }
+        .analyticsPage("场景练习")
         .task {
-            if record?.lines.isEmpty == true { await respond() }
+            if let record, record.lines.isEmpty {
+                trackStart(record)
+                await respond()
+            }
         }
         .onDisappear {
             if voice.isListening { voice.cancel() }
@@ -152,7 +156,15 @@ struct PracticeView: View {
     private func begin(scenario: String, role: String) {
         record = PracticeRecord(scenario: scenario, role: role, level: level)
         savedTurn = nil
+        if let record { trackStart(record) }
         Task { await respond() }
+    }
+
+    /// 统计：练的是哪个场景（预设场景记名字，自己描述的只记“自定义”）
+    private func trackStart(_ record: PracticeRecord) {
+        let preset = PracticePreset.all.first { $0.scenario == record.scenario }
+        Analytics.track(.practiceStart, ["scene": preset?.title ?? "自定义", "level": AITasks.practiceLevels[min(record.level, 2)],
+                                         "hands_free": handsFree ? "yes" : "no"])
     }
 
     // MARK: 对话
@@ -365,6 +377,7 @@ struct PracticeView: View {
                     Button {
                         focused = false
                         handsFree = true
+                        Analytics.track(.practiceHandsFree, ["on": "yes"])
                     } label: {
                         Image(systemName: "waveform")
                             .font(.system(size: 17, weight: .semibold))
@@ -419,6 +432,7 @@ struct PracticeView: View {
         HStack(spacing: 12) {
             Button {
                 handsFree = false
+                Analytics.track(.practiceHandsFree, ["on": "no"])
                 if voice.isListening { voice.cancel() }
             } label: {
                 Image(systemName: "keyboard")
@@ -482,18 +496,19 @@ struct PracticeView: View {
         let text = input.trimmed
         guard !text.isEmpty, !thinking else { return }
         input = ""
-        send(text)
+        send(text, by: "text")
     }
 
     private func finishVoice() {
         let result = voice.stop()
         if let audio = result.audio { ConversationStore.deleteMediaFile(audio) }
         guard !result.text.isEmpty else { return }
-        send(result.text)
+        send(result.text, by: handsFree ? "voice_chat" : "voice")
     }
 
-    private func send(_ text: String) {
+    private func send(_ text: String, by input: String) {
         guard record != nil else { return }
+        Analytics.track(.practiceReply, ["input": input])
         error = nil
         withAnimation(.snappy) { record?.lines.append(PracticeLine(isMine: true, text: text)) }
         Task { await respond() }
@@ -535,6 +550,8 @@ struct PracticeView: View {
         Speaker.shared.stop()
         if let record, record.lines.contains(where: \.isMine) {
             savedTurn = ModuleStore.shared.savePractice(record, into: savedTurn)
+            Analytics.track(.practiceFinish, ["lines": Analytics.bucket(record.lines.filter(\.isMine).count, [2, 5, 10, 20]),
+                                              "corrections": Analytics.bucket(record.lines.filter { $0.better != nil }.count, [0, 2, 5])])
             showSummary = true
         } else {
             dismiss()
@@ -549,6 +566,7 @@ struct PracticeView: View {
         savedTurn = nil
         revealed = []
         error = nil
+        if let record { trackStart(record) }
         Task { await respond() }
     }
 }

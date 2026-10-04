@@ -74,6 +74,8 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate, AV
         if playing == speech {
             stop()
         } else {
+            let voice = !speech.isChinese && Self.isWordLike(speech.text) ? "youdao" : (AIVoice.selected != nil && AIVoice.apiKey != nil ? "ai" : "system")
+            Analytics.track(.speak, ["voice": voice, "language": speech.isChinese ? "zh" : "en"])
             play(speech)
         }
     }

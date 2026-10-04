@@ -246,6 +246,7 @@ struct ConversationView: View {
                 }
             }
         }
+        .analyticsPage("翻译")
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 8) {
                 // 同声传译收起后，在输入框上方显示“正在传译”，点一下回去

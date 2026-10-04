@@ -182,6 +182,7 @@ struct ReplyView: View {
         Task {
             defer { working = false }
             do {
+                Analytics.track(.replyWrite, ["kind": kind.rawValue, "mode": mode.rawValue])
                 reply = try await AITasks.reply(to: received, kind: kind, mode: mode, input: input.trimmed,
                                                 previous: previous, change: change, config: config)
             } catch {

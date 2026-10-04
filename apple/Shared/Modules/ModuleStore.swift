@@ -222,7 +222,8 @@ final class ModuleRouter: ObservableObject {
     /// 主屏快捷操作“新建翻译”
     @Published var newSessionRequested = false
 
-    func open(_ module: AppModule, start: Bool = false) {
+    func open(_ module: AppModule, start: Bool = false, from: String = "drawer") {
+        if self.module != module { Analytics.track(.moduleOpen, ["module": module.rawValue, "from": from]) }
         self.module = module
         guard start else { return }
         switch module {
@@ -234,10 +235,11 @@ final class ModuleRouter: ObservableObject {
 
     /// 主屏快捷操作的类型
     func handleShortcut(_ type: String) {
+        Analytics.track(.quickAction, ["type": type])
         switch type {
-        case "interpret": open(.interpret, start: true)
-        case "face": open(.face, start: true)
-        case "practice": open(.practice)
+        case "interpret": open(.interpret, start: true, from: "shortcut")
+        case "face": open(.face, start: true, from: "shortcut")
+        case "practice": open(.practice, from: "shortcut")
         case "new":
             module = nil
             newSessionRequested = true

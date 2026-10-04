@@ -97,6 +97,7 @@ struct ModulePage: View {
             }
         }
         .tint(.lxAccent)
+        .analyticsPage(module.fullTitle + "首页")
         .onChange(of: router.launch, initial: true) { _, launch in
             guard let launch else { return }
             router.launch = nil
@@ -568,6 +569,7 @@ struct InterpretRecordPage: View {
         Task {
             defer { summarizing = false }
             do {
+                Analytics.track(.interpretSummary)
                 let response = try await AITasks.summarizeTranscript(record.lines, config: AIClient.currentConfig)
                 store.updateInterpretation(id) { $0.summary = response.text }
             } catch {

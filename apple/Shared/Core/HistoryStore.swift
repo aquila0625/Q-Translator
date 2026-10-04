@@ -45,6 +45,7 @@ final class HistoryStore: ObservableObject {
     func toggleStar(_ text: String) {
         guard let index = items.firstIndex(where: { $0.text == text }) else { return }
         items[index].starred.toggle()
+        if items[index].starred { Analytics.track(.wordStar) }
         save()
     }
 

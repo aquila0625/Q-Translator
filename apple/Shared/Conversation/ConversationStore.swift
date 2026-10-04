@@ -192,6 +192,7 @@ final class ConversationStore: ObservableObject {
     func createScene(name: String, cover: SceneCover) -> SceneGroup {
         let scene = SceneGroup(name: name.trimmed.isEmpty ? "新场景" : name.trimmed, cover: cover)
         scenes.append(scene)
+        Analytics.track(.sceneNew)
         save()
         return scene
     }

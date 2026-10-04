@@ -99,7 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func openModule(_ sender: NSMenuItem) {
         guard let module = AppModule(rawValue: sender.representedObject as? String ?? "") else { return }
         show()
-        ModuleRouter.shared.open(module, start: sender.tag == 1)
+        ModuleRouter.shared.open(module, start: sender.tag == 1, from: "menu")
     }
 
     @objc func openSettings(_ sender: Any?) {

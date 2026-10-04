@@ -16,3 +16,7 @@ DerivedData/
 *.local
 dist/
 .idea/
+
+# 友盟 SDK（用 Scripts/fetch_umeng.sh 下载）和本机的 AppKey
+apple/Vendor/
+apple/Config/Local.xcconfig

@@ -20,6 +20,9 @@ final class InterpretSession: ObservableObject {
 
     var isActive: Bool { interpreter != nil }
 
+    /// 这段传译中途收起过或者回到过桌面（统计用）
+    var wentToBackground = false
+
     /// 开始一段新的传译，或者接着某条记录录（continuing）。已经在传译时只是回到传译页
     func begin(continuing id: UUID?, controller: ConversationController) {
         presented = true
@@ -37,6 +40,9 @@ final class InterpretSession: ObservableObject {
         Speaker.recordingActive = true
         // 继续录时沿用那条记录的方向（不改设置里的默认方向）
         let chinese = record?.sourceIsChinese ?? UserDefaults.standard.bool(forKey: "interpreter.sourceIsChinese")
+        wentToBackground = false
+        Analytics.track(.interpretStart, ["direction": Analytics.direction(fromChinese: chinese), "continue": record == nil ? "no" : "yes",
+                                          "speak": interpreter.speakTranslations ? "on" : "off"])
         Task {
             await translator.prepare(fromChinese: chinese)
             await interpreter.start(sourceIsChinese: chinese)
@@ -48,6 +54,7 @@ final class InterpretSession: ObservableObject {
     /// 换方向：前面的字幕保留，后面按新语言识别
     func switchDirection(toChinese: Bool) async {
         guard let interpreter, let translator, interpreter.sourceIsChinese != toChinese else { return }
+        Analytics.track(.interpretSwitch, ["to": Analytics.direction(fromChinese: toChinese)])
         await interpreter.switchDirection()
         await translator.prepare(fromChinese: toChinese)
         if continuing == nil { UserDefaults.standard.set(interpreter.sourceIsChinese, forKey: "interpreter.sourceIsChinese") }
@@ -58,6 +65,9 @@ final class InterpretSession: ObservableObject {
         guard let interpreter else { return }
         await interpreter.stop()
         let lines = interpreter.segments.map { TranscriptLine(original: $0.original, translation: $0.translation ?? "") }
+        Analytics.track(.interpretFinish, ["minutes": Analytics.bucket(Int(interpreter.elapsed / 60), [1, 10, 30, 60]),
+                                           "sentences": Analytics.bucket(lines.count, [0, 10, 50, 200]),
+                                           "background": wentToBackground ? "yes" : "no"])
         ModuleStore.shared.saveInterpretation(lines, duration: interpreter.elapsed,
                                               sourceIsChinese: interpreter.sourceIsChinese, into: continuing)
         Speaker.shared.stop()
@@ -78,7 +88,7 @@ struct InterpretMiniBar: View {
     var body: some View {
         if let interpreter = session.interpreter, !session.presented {
             MiniBarContent(interpreter: interpreter, previousDuration: session.previousDuration) {
-                ModuleRouter.shared.open(.interpret)
+                ModuleRouter.shared.open(.interpret, from: "mini_bar")
                 ModuleRouter.shared.launch = .interpret(continuing: nil)
             }
             .transition(.move(edge: .top).combined(with: .opacity))

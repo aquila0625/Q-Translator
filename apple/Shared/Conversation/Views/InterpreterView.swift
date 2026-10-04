@@ -50,7 +50,14 @@ private struct InterpreterScreen: View {
         .background { WashBackground().ignoresSafeArea() }
         .onAppear { session.presented = true }
         // 关掉这一页不等于结束：传译在后台继续，别的页面上方显示小提示条
-        .onDisappear { session.presented = false }
+        .onDisappear {
+            session.presented = false
+            if session.isActive {
+                session.wentToBackground = true
+                Analytics.track(.interpretMinimize)
+            }
+        }
+        .analyticsPage("同声传译")
         #if os(macOS)
         .frame(minWidth: 560, minHeight: 720)
         #endif
