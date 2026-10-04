@@ -1,5 +1,7 @@
 package com.yishulabs.qtranslator.ui
 
+import com.yishulabs.qtranslator.modules.InterpretSession
+
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -103,8 +105,6 @@ private fun SettingsMain(onPage: (SettingsPage) -> Unit) {
     var modelMenu by remember { mutableStateOf(false) }
     var testing by remember { mutableStateOf(false) }
     var testResult by remember { mutableStateOf<String?>(null) }
-    val settings = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
-    var interpreterFromChinese by remember { mutableStateOf(settings.getBoolean("interpreter.sourceIsChinese", false)) }
 
     Text("设置", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = colors.ink)
     Spacer(Modifier.height(16.dp))
@@ -227,9 +227,8 @@ private fun SettingsMain(onPage: (SettingsPage) -> Unit) {
     Footnote("关闭“说完自动翻译”时，说的话先放进输入框，可以改完再翻译。翻译方向选了中→英或英→中时，按方向识别；正在听的时候也可以点一下切换。")
 
     Group("同声传译") {
-        ChoiceRow("默认方向", listOf(false to "英 → 中", true to "中 → 英"), interpreterFromChinese) {
-            interpreterFromChinese = it
-            settings.edit().putBoolean("interpreter.sourceIsChinese", it).apply()
+        ChoiceRow("默认方向", listOf(false to "英 → 中", true to "中 → 英"), InterpretSession.defaultFromChinese) {
+            InterpretSession.updateDefaultFromChinese(it)
         }
         SettingsDivider()
         SettingRow("默认朗读译文（建议戴耳机）") { Switch(Prefs.interpreterSpeak, { Prefs.updateInterpreterSpeak(it) }) }

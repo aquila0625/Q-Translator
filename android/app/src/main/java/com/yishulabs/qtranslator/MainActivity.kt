@@ -1,6 +1,7 @@
 package com.yishulabs.qtranslator
 
 import android.content.Intent
+import com.yishulabs.qtranslator.modules.InterpretService
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
@@ -40,7 +41,8 @@ class MainActivity : ComponentActivity() {
     /** 从别的 app 分享过来的文字、图片，或选中文字后点“快译”：放进当前会话翻译；桌面快捷方式打开对应功能 */
     private fun handle(intent: Intent?) {
         intent ?: return
-        // TODO(merge): 在这里加上 `if (InterpretService.handleOpen(intent)) return`（modules/InterpretService.kt 在另一个分支里）
+        // 点同声传译的通知：回到传译页
+        if (InterpretService.handleOpen(intent)) return
         when (intent.action) {
             ACTION_SHORTCUT -> intent.getStringExtra(EXTRA_SHORTCUT)?.let { handleShortcut(it) }
             Intent.ACTION_PROCESS_TEXT -> intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.let { controller.sendText(it.toString()) }

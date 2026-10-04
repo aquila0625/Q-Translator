@@ -99,7 +99,7 @@ object InterpretSession {
         Analytics.track(
             Analytics.Event.INTERPRET_START,
             mapOf(
-                "direction" to direction(chinese), "continue" to if (record == null) "no" else "yes",
+                "direction" to Analytics.direction(chinese), "continue" to if (record == null) "no" else "yes",
                 "speak" to if (interpreter.speakTranslations) "on" else "off",
             ),
         )
@@ -136,7 +136,7 @@ object InterpretSession {
     fun switchDirection(toChinese: Boolean) {
         val interpreter = interpreter ?: return
         if (interpreter.sourceIsChinese == toChinese) return
-        Analytics.track(Analytics.Event.INTERPRET_SWITCH, mapOf("to" to direction(toChinese)))
+        Analytics.track(Analytics.Event.INTERPRET_SWITCH, mapOf("to" to Analytics.direction(toChinese)))
         interpreter.switchDirection()
         scope.launch { prepareTranslator(toChinese) }
         if (continuing == null) updateDefaultFromChinese(interpreter.sourceIsChinese)
@@ -164,8 +164,8 @@ object InterpretSession {
             Analytics.track(
                 Analytics.Event.INTERPRET_FINISH,
                 mapOf(
-                    "minutes" to bucket((seconds / 60).toInt(), listOf(1, 10, 30, 60)),
-                    "sentences" to bucket(lines.size, listOf(0, 10, 50, 200)),
+                    "minutes" to Analytics.bucket((seconds / 60).toInt(), listOf(1, 10, 30, 60)),
+                    "sentences" to Analytics.bucket(lines.size, listOf(0, 10, 50, 200)),
                     "background" to if (wentToBackground) "yes" else "no",
                 ),
             )
@@ -208,16 +208,5 @@ object InterpretSession {
         QuickTranslator.refresh()
         translatorOnDevice = QuickTranslator.onDevice
         if (translatorOnDevice) runCatching { OfflineTranslator.translate(if (fromChinese) "你好" else "hello", fromChinese) }
-    }
-
-    // 统计用的分类，和苹果版 Analytics.direction / bucket 一致
-
-    private fun direction(fromChinese: Boolean) = if (fromChinese) "zh2en" else "en2zh"
-
-    private fun bucket(value: Int, edges: List<Int>): String {
-        edges.forEachIndexed { i, edge ->
-            if (value <= edge) return if (i == 0) "≤$edge" else "${edges[i - 1] + 1}-$edge"
-        }
-        return ">${edges.lastOrNull() ?: 0}"
     }
 }
