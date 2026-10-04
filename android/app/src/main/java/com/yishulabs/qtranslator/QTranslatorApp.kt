@@ -25,6 +25,7 @@ class QTranslatorApp : Application() {
         HistoryStore.init(this)
         Speaker.init(this)
         VoiceInput.init(this)
+        com.yishulabs.qtranslator.core.AudioReplay.init(this)
         ModuleStore.init(this)
         Analytics.init(this)
     }

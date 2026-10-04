@@ -123,6 +123,7 @@ private fun Editor(controller: ConversationController, session: ChatSession, max
     }
 
     Column(Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) {
+        VoiceErrorBanner()
         if (hasImages) AttachmentTray(controller)
         if (isLong) {
             Text(

@@ -15,6 +15,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import java.io.File
+import java.util.UUID
 
 /**
  * 语音输入：用系统的语音识别把说的话实时变成文字。能在本机识别时优先本机识别。
@@ -22,6 +24,9 @@ import androidx.core.content.ContextCompat
  * 和苹果版的 VoiceInput 是同一套接口：start / stop / cancel / switchLanguage，界面读 text、levels、state。
  * 安卓的识别器说完一句、停顿一下就会自己结束；这里在结束后自动接着听，直到调用 stop，
  * 前面识别出的文字保留在 finalText 里。
+ *
+ * 安卓 13 起自己收音（PcmRecorder）：同一份声音交给识别器，同时存成 m4a，之后可以回放原声。
+ * 识别器不接受外部音源时退回让它自己收音，这次就没有原声。
  */
 object VoiceInput {
     sealed interface State {
@@ -65,6 +70,9 @@ object VoiceInput {
     private lateinit var appContext: Context
     private val main = Handler(Looper.getMainLooper())
     private var recognizer: SpeechRecognizer? = null
+    /** 自己收音时的录音器和文件名（filesDir/audio 下）；没在自己收音时是 null */
+    private var recorder: PcmRecorder? = null
+    private var audioName: String? = null
     /** 这一次 start 的编号：旧识别器迟到的回调直接丢掉 */
     private var generation = 0
 
@@ -104,18 +112,22 @@ object VoiceInput {
         generation++
         startedAt = System.currentTimeMillis()
         state = State.Listening
+        startRecorder(generation)
         listen(generation)
     }
 
     /** 说完了：返回识别出的文字、原声文件名和时长 */
     fun stop(): Result {
-        val result = Result(text, null, startedAt?.let { (System.currentTimeMillis() - it) / 1000.0 } ?: 0.0)
+        val text = text
+        val duration = startedAt?.let { (System.currentTimeMillis() - it) / 1000.0 } ?: 0.0
+        val audio = stopRecorder(keep = true)
         end()
-        return result
+        return Result(text, audio, duration)
     }
 
     /** 取消：不要文字，也不要录音 */
     fun cancel() {
+        stopRecorder(keep = false)
         end()
         finalText = ""
         volatileText = ""
@@ -141,6 +153,7 @@ object VoiceInput {
     }
 
     private fun end() {
+        stopRecorder(keep = false)
         generation++
         destroyRecognizer()
         state = State.Idle
@@ -189,7 +202,7 @@ object VoiceInput {
             override fun onEvent(eventType: Int, params: Bundle?) {}
 
             override fun onRmsChanged(rmsdB: Float) {
-                if (gen != generation) return
+                if (gen != generation || recorder != null) return
                 // rmsdB 大约在 -2…10 之间
                 val level = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
                 levels = levels.drop(1) + level
@@ -224,7 +237,58 @@ object VoiceInput {
                 }
             }
         })
-        recognizer.startListening(intent())
+        val pipe = recorder?.newPipe()
+        recognizer.startListening(intent().apply {
+            if (pipe != null && Build.VERSION.SDK_INT >= 33) {
+                putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, pipe)
+                putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1)
+                putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_ENCODING, android.media.AudioFormat.ENCODING_PCM_16BIT)
+                putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, PcmRecorder.SAMPLE_RATE)
+            }
+        })
+        // 读端已经交给识别器（它会自己复制一份），这里关掉自己手里的
+        runCatching { pipe?.close() }
+    }
+
+    // 自己收音（安卓 13 起）
+
+    private fun startRecorder(gen: Int) {
+        if (Build.VERSION.SDK_INT < 33) return
+        val name = "voice-" + UUID.randomUUID().toString() + ".m4a"
+        val file = File(File(appContext.filesDir, "audio").apply { mkdirs() }, name)
+        val recorder = PcmRecorder(
+            file,
+            onLevel = { level -> main.post { if (gen == generation) levels = levels.drop(1) + level } },
+            onStall = { main.post { if (gen == generation) useRecognizerMic(gen) } },
+        )
+        if (recorder.start()) {
+            this.recorder = recorder
+            audioName = name
+        } else {
+            file.delete()
+        }
+    }
+
+    /** 停止自己收音：keep 时返回录好的文件名（没录到声音返回 null），否则删掉文件 */
+    private fun stopRecorder(keep: Boolean): String? {
+        val recorder = recorder ?: return null
+        val name = audioName
+        this.recorder = null
+        audioName = null
+        val wrote = recorder.stop()
+        val file = name?.let { File(File(appContext.filesDir, "audio"), it) }
+        if (!keep || !wrote) {
+            file?.delete()
+            return null
+        }
+        return name
+    }
+
+    /** 识别器不读我们送的声音：放弃自己收音（这次不保存原声），让识别器自己用麦克风 */
+    private fun useRecognizerMic(gen: Int) {
+        stopRecorder(keep = false)
+        destroyRecognizer()
+        listen(gen)
     }
 
     private fun restart(gen: Int, delayMs: Long = 0) {
@@ -236,6 +300,7 @@ object VoiceInput {
     }
 
     private fun fail(message: String) {
+        stopRecorder(keep = false)
         end()
         state = State.Failed(message)
     }
