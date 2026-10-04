@@ -68,7 +68,7 @@
 
 - 你翻译的文字、图片和录音都留在本机，只有翻译来源或 AI 服务商需要的内容会发出去：在线翻译的请求，或者发给你自己 AI 服务商的文字。
 - API Key 保存在系统钥匙串里（安卓用 Android Keystore 加密），只会发给你选择的服务商。
-- App Store 版本可以通过[友盟+](https://www.umeng.com/)发送匿名使用统计（只统计用了哪些功能），第一次打开时征得你同意后才会发送，随时可以在设置里关闭。从源码编译的版本不含统计 Key，什么都不发。
+- 正式版会通过[友盟+](https://www.umeng.com/)收集匿名的使用数据（只统计用了哪些功能，不含你的内容），详见[隐私协议](docs/PRIVACY.zh-CN.md)。从源码编译的版本不含统计 Key，什么都不收集。
 
 ## 从源码编译
 
@@ -115,7 +115,7 @@ cd android
 
 APK 在 `android/app/build/outputs/apk/release/`，每种 CPU 一个（现在的手机基本都是 `arm64-v8a`）。Release 版用调试证书签名，可以直接安装；上架应用商店前要换成你自己的签名。
 
-想用自己的友盟统计，把 Key 写在 `android/local.properties`（git 会忽略它）。平板用平板的 Key，没填时用手机的 Key；一个都没填就不发统计，也不弹同意提示：
+想用自己的友盟统计，把 Key 写在 `android/local.properties`（git 会忽略它）。平板用平板的 Key，没填时用手机的 Key；一个都没填就不收集任何数据：
 
 ```
 UMENG_APPKEY_ANDROID=...

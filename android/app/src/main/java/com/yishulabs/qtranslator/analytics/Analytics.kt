@@ -1,8 +1,16 @@
 package com.yishulabs.qtranslator.analytics
 
+import android.app.Activity
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.Modifier
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -55,11 +63,11 @@ object Analytics {
         SETTINGS_SPEED("settings_speed", "调整朗读速度"),
     }
 
-    private const val CONSENT_KEY = "analytics.consent"
+    private const val ACCEPTED_KEY = "privacy.accepted.v1"
     private lateinit var store: SharedPreferences
 
-    /** 用户的选择：null 还没问过，true 同意，false 不同意 */
-    var consent by mutableStateOf<Boolean?>(null)
+    /** 用户是否同意了隐私协议；统计跟着协议走，没有单独的开关 */
+    var accepted by mutableStateOf(false)
         private set
 
     /** 这个版本能发统计（编译时填了友盟 AppKey） */
@@ -67,29 +75,29 @@ object Analytics {
 
     fun init(context: Context) {
         store = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
-        consent = if (store.contains(CONSENT_KEY)) store.getBoolean(CONSENT_KEY, false) else null
+        accepted = store.getBoolean(ACCEPTED_KEY, false)
         UmengBridge.preInit(context)
-        if (consent == true) UmengBridge.start(context)
+        if (accepted) UmengBridge.start(context)
     }
 
-    fun updateConsent(context: Context, value: Boolean) {
-        consent = value
-        store.edit().putBoolean(CONSENT_KEY, value).apply()
-        if (value) UmengBridge.start(context) else UmengBridge.stop()
+    fun accept(context: Context) {
+        accepted = true
+        store.edit().putBoolean(ACCEPTED_KEY, true).apply()
+        UmengBridge.start(context)
     }
 
     /** 记录一次事件。属性只放功能相关的分类（方向、来源、档位），不放用户输入的内容 */
     fun track(event: Event, attributes: Map<String, String> = emptyMap()) {
-        if (consent == true) UmengBridge.event(event.id, attributes)
+        if (accepted) UmengBridge.event(event.id, attributes)
     }
 
     /** 页面开始和结束（友盟的页面统计） */
     fun pageStart(name: String) {
-        if (consent == true) UmengBridge.pageStart(name)
+        if (accepted) UmengBridge.pageStart(name)
     }
 
     fun pageEnd(name: String) {
-        if (consent == true) UmengBridge.pageEnd(name)
+        if (accepted) UmengBridge.pageEnd(name)
     }
 
     /** 把数字分成几档，统计里看分布，不记具体数字 */
@@ -112,30 +120,57 @@ fun AnalyticsPage(name: String) {
     }
 }
 
+/** 隐私协议全文。同样的内容在 docs/PRIVACY.md 里 */
+val privacySections = listOf(
+    "我们收集什么" to "为了了解哪些功能有用、把快译做得更好，快译会收集匿名的使用数据：你使用了哪些功能（例如查词、翻译、拍照翻译、同声传译、面对面对话、场景练习）、功能的使用时长和次数、你的设备型号、系统版本和 App 版本。这些数据不能识别你是谁。",
+    "我们不收集什么" to "你输入或说出的内容、翻译的文字、拍摄或选择的图片、录音、会话和记录的内容、生词本、你的 API Key，都不会上传给我们或统计服务商。",
+    "数据交给谁处理" to "使用数据由友盟+（Umeng）提供的统计服务处理，详见友盟+的隐私政策。快译没有自己的服务器。",
+    "你的内容在哪里" to "会话、图片、录音和各种记录只保存在你的设备上，删除 App 就会一起删除。翻译和 AI 功能会按你的选择，把需要翻译的文字发给翻译服务或你自己填写的 AI 服务商。",
+)
+
+@Composable
+private fun PrivacyText() {
+    androidx.compose.foundation.layout.Column(
+        Modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
+    ) {
+        privacySections.forEach { (title, body) ->
+            androidx.compose.foundation.layout.Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp)) {
+                Text(title, fontWeight = FontWeight.Bold)
+                Text(body, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
+}
+
+/** 设置里查看隐私协议 */
+@Composable
+fun PrivacyPolicyDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("隐私协议") },
+        text = { PrivacyText() },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("好") } },
+    )
+}
+
 /**
- * 第一次打开时问一次要不要发送匿名使用统计（没有统计功能的版本不问）。
+ * 第一次打开时要求同意隐私协议，不同意就退出（没有统计功能的版本不弹）。
  * 根界面调用一次；顺便统计根界面正在看的页面：翻译，或者某个模块的首页。
  */
 @Composable
 fun AnalyticsConsentPrompt(page: String) {
     val context = LocalContext.current
-    var asking by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        if (!Analytics.isAvailable || Analytics.consent != null) return@LaunchedEffect
-        delay(1000)
-        asking = true
-    }
     AnalyticsPage(page)
-    if (asking) {
+    if (Analytics.isAvailable && !Analytics.accepted) {
         AlertDialog(
             onDismissRequest = {},
-            title = { Text("帮助改进快译") },
-            text = { Text("允许发送匿名使用统计吗？只统计用了哪些功能（比如查词、拍照翻译、同声传译），不包含你输入的文字、图片和录音。统计由友盟+处理，随时可以在设置里关闭。") },
-            confirmButton = {
-                TextButton(onClick = { asking = false; Analytics.updateConsent(context, true) }) { Text("允许") }
-            },
+            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
+            title = { Text("隐私协议") },
+            text = { PrivacyText() },
+            confirmButton = { TextButton(onClick = { Analytics.accept(context) }) { Text("同意") } },
             dismissButton = {
-                TextButton(onClick = { asking = false; Analytics.updateConsent(context, false) }) { Text("不允许") }
+                TextButton(onClick = { (context as? Activity)?.finishAffinity() }) { Text("不同意") }
             },
         )
     }

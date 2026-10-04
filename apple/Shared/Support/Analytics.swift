@@ -5,6 +5,9 @@ import UMCommon
 #if canImport(UIKit)
 import UIKit
 #endif
+#if canImport(AppKit)
+import AppKit
+#endif
 
 /// 匿名使用统计（友盟+）。只统计用了哪些功能，不上报输入的文字、图片和录音。
 /// 用户同意后才初始化、才上报；没有 AppKey、或者这个平台没有友盟 SDK（目前是 Mac）时什么都不做。
@@ -75,7 +78,7 @@ enum Analytics {
         }
     }
 
-    private static let consentKey = "analytics.consent"
+    private static let acceptedKey = "privacy.accepted.v1"
     private static var started = false
 
     /// 这台设备用的 AppKey：iPad 和 iPhone 分开统计；没填就是 nil
@@ -89,7 +92,7 @@ enum Analytics {
         return key.isEmpty || key.hasPrefix("$(") ? nil : key
     }
 
-    /// 这个版本能发统计（有 AppKey，也有友盟 SDK）
+    /// 这个版本带统计（有 AppKey，也有友盟 SDK）。没有的版本（比如从源码编译的）不收集任何数据，也不用弹隐私协议
     static var isAvailable: Bool {
         #if canImport(UMCommon)
         appKey != nil
@@ -98,18 +101,18 @@ enum Analytics {
         #endif
     }
 
-    /// 用户的选择：nil 还没问过，true 同意，false 不同意
-    static var consent: Bool? {
-        get { UserDefaults.standard.object(forKey: consentKey) as? Bool }
+    /// 用户是否同意了隐私协议
+    static var accepted: Bool {
+        get { UserDefaults.standard.bool(forKey: acceptedKey) }
         set {
-            UserDefaults.standard.set(newValue, forKey: consentKey)
-            if newValue == true { start() } else { stop() }
+            UserDefaults.standard.set(newValue, forKey: acceptedKey)
+            if newValue { start() }
         }
     }
 
-    /// 启动时调用：用户同意过才初始化
+    /// 启动时调用：同意过隐私协议才初始化
     static func startIfAllowed() {
-        if consent == true { start() }
+        if accepted { start() }
     }
 
     private static func start() {
@@ -124,14 +127,7 @@ enum Analytics {
         #endif
     }
 
-    private static func stop() {
-        #if canImport(UMCommon)
-        guard started else { return }
-        UMConfigure.setAnalyticsEnabled(false)
-        #endif
-    }
-
-    private static var enabled: Bool { started && consent == true }
+    private static var enabled: Bool { started && accepted }
 
     /// 记录一次事件。属性只放功能相关的分类（方向、来源、档位），不放用户输入的内容
     static func track(_ event: Event, _ attributes: [String: String] = [:]) {
@@ -177,28 +173,100 @@ extension View {
             .onDisappear { Analytics.endPage(name) }
     }
 
-    /// 第一次打开时问一次要不要发送匿名使用统计（没有统计功能的版本不问）
-    func analyticsConsentPrompt() -> some View {
-        modifier(AnalyticsConsentPrompt())
+    /// 第一次打开时要求同意隐私协议；不同意就退出（没有统计功能的版本不弹）
+    func privacyGate() -> some View {
+        modifier(PrivacyGate())
     }
 }
 
-private struct AnalyticsConsentPrompt: ViewModifier {
+/// 隐私协议全文。同样的内容在 docs/PRIVACY.md 里
+enum PrivacyPolicy {
+    static let title = "隐私协议"
+
+    static let sections: [(String, String)] = [
+        ("我们收集什么", "为了了解哪些功能有用、把快译做得更好，快译会收集匿名的使用数据：你使用了哪些功能（例如查词、翻译、拍照翻译、同声传译、面对面对话、场景练习）、功能的使用时长和次数、你的设备型号、系统版本和 App 版本。这些数据不能识别你是谁。"),
+        ("我们不收集什么", "你输入或说出的内容、翻译的文字、拍摄或选择的图片、录音、会话和记录的内容、生词本、你的 API Key，都不会上传给我们或统计服务商。"),
+        ("数据交给谁处理", "使用数据由友盟+（Umeng）提供的统计服务处理，详见友盟+的隐私政策。快译没有自己的服务器。"),
+        ("你的内容在哪里", "会话、图片、录音和各种记录只保存在你的设备上，删除 App 就会一起删除。翻译和 AI 功能会按你的选择，把需要翻译的文字发给翻译服务或你自己填写的 AI 服务商。"),
+        ("需要你的同意", "同意本协议后才能使用快译。如果不同意，App 将退出。"),
+    ]
+}
+
+/// 隐私协议页面：首次打开时要同意才能继续；设置里也能随时查看
+struct PrivacyPolicyView: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                ForEach(PrivacyPolicy.sections, id: \.0) { section in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(section.0).font(.headline)
+                        Text(section.1).font(.subheadline).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(20)
+            .frame(maxWidth: 560, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+        .navigationTitle(PrivacyPolicy.title)
+        .inlineNavigationTitle()
+    }
+}
+
+private struct PrivacyGate: ViewModifier {
     @State private var asking = false
 
     func body(content: Content) -> some View {
         content
             .task {
                 Analytics.startIfAllowed()
-                guard Analytics.isAvailable, Analytics.consent == nil else { return }
-                try? await Task.sleep(for: .seconds(1))
-                asking = true
+                if Analytics.isAvailable, !Analytics.accepted { asking = true }
             }
-            .alert("帮助改进快译", isPresented: $asking) {
-                Button("不允许", role: .cancel) { Analytics.consent = false }
-                Button("允许") { Analytics.consent = true }
-            } message: {
-                Text("允许发送匿名使用统计吗？只统计用了哪些功能（比如查词、拍照翻译、同声传译），不包含你输入的文字、图片和录音。统计由友盟+处理，随时可以在设置里关闭。")
+            #if os(iOS)
+            .fullScreenCover(isPresented: $asking) { gate }
+            #else
+            .sheet(isPresented: $asking) { gate }
+            #endif
+    }
+
+    private var gate: some View {
+        VStack(spacing: 0) {
+            Text(PrivacyPolicy.title).font(.title2.weight(.bold)).padding(.top, 28).padding(.bottom, 8)
+            PrivacyPolicyView().navigationTitle("")
+            VStack(spacing: 10) {
+                Button {
+                    Analytics.accepted = true
+                    asking = false
+                } label: {
+                    Text("同意")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(Color.lxOnAccent)
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                        .background(Color.lxAccent, in: .capsule)
+                }
+                .buttonStyle(.plain)
+                Button("不同意") { quit() }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .frame(minHeight: 44)
             }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 20)
+            .frame(maxWidth: 560)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.lxBackground.ignoresSafeArea())
+        .interactiveDismissDisabled()
+        #if os(macOS)
+        .frame(minWidth: 480, minHeight: 520)
+        #endif
+    }
+
+    private func quit() {
+        #if os(macOS)
+        NSApp.terminate(nil)
+        #else
+        exit(0)
+        #endif
     }
 }

@@ -21,7 +21,7 @@ This guide uses the iPhone app; the Mac and iPad apps work the same way. The app
 
 The app opens on a translation conversation. Type in the box at the bottom; there is no language to pick: English is translated into Chinese and Chinese into English.
 
-On first launch you are asked whether to send anonymous usage statistics (which features are used; never your text, photos or audio). Either answer is fine and you can change it later in Settings › Privacy (隐私).
+On first launch the app shows its [privacy policy](PRIVACY.md); read and accept it to start using the app. You can read it again later in Settings › 关于 (About) › 隐私协议.
 
 Everything except a few AI features works without an API key: dictionary, sentence and photo translation, voice input, reading aloud, live interpretation and face to face. Scene practice, AI polishing, reply drafting, AI voices and interpretation summaries need a key; see [section 5](#5-ai-features-and-api-keys).
 
@@ -284,8 +284,5 @@ Allow microphone and speech recognition for Q-Translator in the system Settings.
 
 **Where is my data?**
 On your device only: conversations, photos, recordings and records. Deleting the app deletes them.
-
-**How do I turn off usage statistics?**
-Settings › 隐私 (Privacy) › turn off 发送匿名使用统计.
 
 Questions and suggestions are welcome in [GitHub Issues](https://github.com/aquila0625/Q-Translator/issues).

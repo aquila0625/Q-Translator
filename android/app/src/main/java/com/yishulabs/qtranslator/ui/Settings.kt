@@ -263,17 +263,12 @@ private fun SettingsMain(onPage: (SettingsPage) -> Unit) {
     }
     Footnote("先用离线和免费的来源，AI 只在你填了 Key 之后作为补充。")
 
-    if (Analytics.isAvailable) {
-        Group("隐私") {
-            SettingRow("发送匿名使用统计") {
-                Switch(Analytics.consent == true, { Analytics.updateConsent(context, it) })
-            }
-        }
-        Footnote("只统计用了哪些功能，帮助改进快译；不包含你输入的文字、图片和录音。统计由友盟+处理。")
-    }
-
+    var showPrivacy by remember { mutableStateOf(false) }
+    if (showPrivacy) com.yishulabs.qtranslator.analytics.PrivacyPolicyDialog { showPrivacy = false }
     Group("关于") {
         SettingRow("版本", value = BuildConfig.VERSION_NAME)
+        SettingsDivider()
+        SettingRow("隐私协议", onClick = { showPrivacy = true }) { Icon(Icons.Rounded.ChevronRight, null, tint = colors.ink3) }
         SettingsDivider()
         SettingRow("源代码（MIT 许可）", onClick = {
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/aquila0625/Q-Translator")))

@@ -110,7 +110,7 @@ struct WideRootView: View {
         .sheet(item: $sheet) { RootSheetContent(sheet: $0, controller: controller) }
         .appAppearance()
         #if os(macOS)
-        .analyticsConsentPrompt()
+        .privacyGate()
         #endif
         .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in sheet = .settings }
     }

@@ -68,7 +68,7 @@ Q-Translator is not affiliated with any of these providers.
 
 - The text, photos and recordings you translate stay on your device, except for what a translation source or AI provider needs to answer (an online translation request, or the text you send to your own AI provider).
 - API keys are stored in the system Keychain (Android Keystore on Android) and sent only to the provider you chose.
-- The App Store build can send anonymous usage statistics (which features are used) through [Umeng](https://www.umeng.com/), only after you agree on first launch; you can switch it off in Settings. Builds from source contain no analytics keys and send nothing.
+- The official builds collect anonymous usage data (which features are used, never your content) through [Umeng](https://www.umeng.com/); see the [privacy policy](docs/PRIVACY.md). Builds from source contain no analytics keys and collect nothing.
 
 ## Build from source
 
@@ -115,7 +115,7 @@ cd android
 
 The APKs are written to `android/app/build/outputs/apk/release/`, one per CPU type (`arm64-v8a` for almost all current phones). Release builds are signed with the debug key so you can install them directly; use your own key before publishing to a store.
 
-To send Umeng usage statistics from your own build, put the keys in `android/local.properties` (ignored by git). Tablets use the tablet key and fall back to the phone key; with no key, nothing is sent and the consent prompt is not shown.
+To send Umeng usage statistics from your own build, put the keys in `android/local.properties` (ignored by git). Tablets use the tablet key and fall back to the phone key; with no key, nothing is collected.
 
 ```
 UMENG_APPKEY_ANDROID=...
