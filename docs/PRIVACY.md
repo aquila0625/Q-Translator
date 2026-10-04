@@ -18,6 +18,10 @@ Usage data is processed by the analytics service of Umeng (友盟+); see Umeng's
 
 Conversations, photos, recordings and records are stored only on your device and are deleted with the app. Translation and AI features send the text to be translated to the translation service, or to the AI provider whose key you entered, as you choose.
 
+## Your choice
+
+If you agree, Q-Translator starts collecting anonymous usage data. If you do not, every feature still works; nothing is collected.
+
 ## Builds from source
 
 Builds from source contain no analytics keys and collect no usage data.

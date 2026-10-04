@@ -1,6 +1,5 @@
 package com.yishulabs.qtranslator.analytics
 
-import android.app.Activity
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.material3.AlertDialog
@@ -64,10 +63,15 @@ object Analytics {
     }
 
     private const val ACCEPTED_KEY = "privacy.accepted.v1"
+    private const val ANSWERED_KEY = "privacy.answered.v1"
     private lateinit var store: SharedPreferences
 
-    /** 用户是否同意了隐私协议；统计跟着协议走，没有单独的开关 */
+    /** 用户是否同意了隐私协议；不同意也能正常使用，只是不统计 */
     var accepted by mutableStateOf(false)
+        private set
+
+    /** 用户是否回答过隐私协议（同意或不同意都算） */
+    var answered by mutableStateOf(false)
         private set
 
     /** 这个版本能发统计（编译时填了友盟 AppKey） */
@@ -76,14 +80,23 @@ object Analytics {
     fun init(context: Context) {
         store = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
         accepted = store.getBoolean(ACCEPTED_KEY, false)
+        answered = store.getBoolean(ANSWERED_KEY, false)
         UmengBridge.preInit(context)
         if (accepted) UmengBridge.start(context)
     }
 
     fun accept(context: Context) {
         accepted = true
-        store.edit().putBoolean(ACCEPTED_KEY, true).apply()
+        answered = true
+        store.edit().putBoolean(ACCEPTED_KEY, true).putBoolean(ANSWERED_KEY, true).apply()
         UmengBridge.start(context)
+    }
+
+    /** 不同意：照常使用，不统计 */
+    fun decline() {
+        accepted = false
+        answered = true
+        store.edit().putBoolean(ACCEPTED_KEY, false).putBoolean(ANSWERED_KEY, true).apply()
     }
 
     /** 记录一次事件。属性只放功能相关的分类（方向、来源、档位），不放用户输入的内容 */
@@ -126,6 +139,7 @@ val privacySections = listOf(
     "我们不收集什么" to "你输入或说出的内容、翻译的文字、拍摄或选择的图片、录音、会话和记录的内容、生词本、你的 API Key，都不会上传给我们或统计服务商。",
     "数据交给谁处理" to "使用数据由友盟+（Umeng）提供的统计服务处理，详见友盟+的隐私政策。快译没有自己的服务器。",
     "你的内容在哪里" to "会话、图片、录音和各种记录只保存在你的设备上，删除 App 就会一起删除。翻译和 AI 功能会按你的选择，把需要翻译的文字发给翻译服务或你自己填写的 AI 服务商。",
+    "你的选择" to "同意后快译会开始统计匿名使用数据；不同意也可以正常使用快译的全部功能，只是不会统计。",
 )
 
 @Composable
@@ -146,23 +160,27 @@ private fun PrivacyText() {
 /** 设置里查看隐私协议 */
 @Composable
 fun PrivacyPolicyDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("隐私协议") },
         text = { PrivacyText() },
         confirmButton = { TextButton(onClick = onDismiss) { Text("好") } },
+        dismissButton = if (Analytics.isAvailable && !Analytics.accepted) {
+            { TextButton(onClick = { Analytics.accept(context); onDismiss() }) { Text("同意并开启统计") } }
+        } else null,
     )
 }
 
 /**
- * 第一次打开时要求同意隐私协议，不同意就退出（没有统计功能的版本不弹）。
+ * 第一次打开时显示隐私协议（没有统计功能的版本不弹）。
  * 根界面调用一次；顺便统计根界面正在看的页面：翻译，或者某个模块的首页。
  */
 @Composable
 fun AnalyticsConsentPrompt(page: String) {
     val context = LocalContext.current
     AnalyticsPage(page)
-    if (Analytics.isAvailable && !Analytics.accepted) {
+    if (Analytics.isAvailable && !Analytics.answered) {
         AlertDialog(
             onDismissRequest = {},
             properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
@@ -170,7 +188,7 @@ fun AnalyticsConsentPrompt(page: String) {
             text = { PrivacyText() },
             confirmButton = { TextButton(onClick = { Analytics.accept(context) }) { Text("同意") } },
             dismissButton = {
-                TextButton(onClick = { (context as? Activity)?.finishAffinity() }) { Text("不同意") }
+                TextButton(onClick = { Analytics.decline() }) { Text("不同意") }
             },
         )
     }

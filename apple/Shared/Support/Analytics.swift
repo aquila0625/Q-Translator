@@ -79,6 +79,7 @@ enum Analytics {
     }
 
     private static let acceptedKey = "privacy.accepted.v1"
+    private static let answeredKey = "privacy.answered.v1"
     private static var started = false
 
     /// 这台设备用的 AppKey：iPad 和 iPhone 分开统计；没填就是 nil
@@ -101,13 +102,24 @@ enum Analytics {
         #endif
     }
 
-    /// 用户是否同意了隐私协议
+    /// 用户是否回答过隐私协议（同意或不同意都算）
+    static var answered: Bool { UserDefaults.standard.bool(forKey: answeredKey) }
+
+    /// 用户是否同意了隐私协议；不同意也能正常使用快译，只是不统计
     static var accepted: Bool {
         get { UserDefaults.standard.bool(forKey: acceptedKey) }
         set {
             UserDefaults.standard.set(newValue, forKey: acceptedKey)
-            if newValue { start() }
+            UserDefaults.standard.set(true, forKey: answeredKey)
+            if newValue { start() } else { stop() }
         }
+    }
+
+    private static func stop() {
+        #if canImport(UMCommon)
+        guard started else { return }
+        UMConfigure.setAnalyticsEnabled(false)
+        #endif
     }
 
     /// 启动时调用：同意过隐私协议才初始化
@@ -173,7 +185,7 @@ extension View {
             .onDisappear { Analytics.endPage(name) }
     }
 
-    /// 第一次打开时要求同意隐私协议；不同意就退出（没有统计功能的版本不弹）
+    /// 第一次打开时显示隐私协议（没有统计功能的版本不弹）
     func privacyGate() -> some View {
         modifier(PrivacyGate())
     }
@@ -188,12 +200,14 @@ enum PrivacyPolicy {
         ("我们不收集什么", "你输入或说出的内容、翻译的文字、拍摄或选择的图片、录音、会话和记录的内容、生词本、你的 API Key，都不会上传给我们或统计服务商。"),
         ("数据交给谁处理", "使用数据由友盟+（Umeng）提供的统计服务处理，详见友盟+的隐私政策。快译没有自己的服务器。"),
         ("你的内容在哪里", "会话、图片、录音和各种记录只保存在你的设备上，删除 App 就会一起删除。翻译和 AI 功能会按你的选择，把需要翻译的文字发给翻译服务或你自己填写的 AI 服务商。"),
-        ("需要你的同意", "同意本协议后才能使用快译。如果不同意，App 将退出。"),
+        ("你的选择", "同意后快译会开始统计匿名使用数据；不同意也可以正常使用快译的全部功能，只是不会统计。"),
     ]
 }
 
 /// 隐私协议页面：首次打开时要同意才能继续；设置里也能随时查看
 struct PrivacyPolicyView: View {
+    @State private var accepted = Analytics.accepted
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -202,6 +216,13 @@ struct PrivacyPolicyView: View {
                         Text(section.0).font(.headline)
                         Text(section.1).font(.subheadline).foregroundStyle(.secondary)
                     }
+                }
+                if Analytics.isAvailable, !accepted {
+                    Button("同意并开启统计") {
+                        Analytics.accepted = true
+                        accepted = true
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
             }
             .padding(20)
@@ -220,7 +241,7 @@ private struct PrivacyGate: ViewModifier {
         content
             .task {
                 Analytics.startIfAllowed()
-                if Analytics.isAvailable, !Analytics.accepted { asking = true }
+                if Analytics.isAvailable, !Analytics.answered { asking = true }
             }
             #if os(iOS)
             .fullScreenCover(isPresented: $asking) { gate }
@@ -245,7 +266,10 @@ private struct PrivacyGate: ViewModifier {
                         .background(Color.lxAccent, in: .capsule)
                 }
                 .buttonStyle(.plain)
-                Button("不同意") { quit() }
+                Button("不同意") {
+                    Analytics.accepted = false
+                    asking = false
+                }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
                     .frame(minHeight: 44)
@@ -259,14 +283,6 @@ private struct PrivacyGate: ViewModifier {
         .interactiveDismissDisabled()
         #if os(macOS)
         .frame(minWidth: 480, minHeight: 520)
-        #endif
-    }
-
-    private func quit() {
-        #if os(macOS)
-        NSApp.terminate(nil)
-        #else
-        exit(0)
         #endif
     }
 }
