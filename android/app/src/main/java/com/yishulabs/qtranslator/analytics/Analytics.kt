@@ -2,9 +2,21 @@ package com.yishulabs.qtranslator.analytics
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import com.umeng.analytics.MobclickAgent
+import com.umeng.commonsdk.UMConfigure
+import com.yishulabs.qtranslator.BuildConfig
+import kotlinx.coroutines.delay
 
 /**
  * 匿名使用统计（友盟+）。只统计用了哪些功能，不上报输入的文字、图片和录音。
@@ -79,17 +91,115 @@ object Analytics {
     fun pageEnd(name: String) {
         if (consent == true) UmengBridge.pageEnd(name)
     }
+
+    /** 把数字分成几档，统计里看分布，不记具体数字 */
+    fun bucket(value: Int, edges: List<Int>): String {
+        edges.forEachIndexed { i, edge ->
+            if (value <= edge) return if (i == 0) "≤$edge" else "${edges[i - 1] + 1}-$edge"
+        }
+        return ">${edges.lastOrNull() ?: 0}"
+    }
+
+    fun direction(fromChinese: Boolean) = if (fromChinese) "zh2en" else "en2zh"
+}
+
+/** 页面统计：显示时开始计时，离开时结束（对应苹果版的 .analyticsPage） */
+@Composable
+fun AnalyticsPage(name: String) {
+    DisposableEffect(name) {
+        Analytics.pageStart(name)
+        onDispose { Analytics.pageEnd(name) }
+    }
 }
 
 /**
- * 和友盟 SDK 打交道的唯一入口。现在是空实现：接入友盟 SDK 时只改这里。
+ * 第一次打开时问一次要不要发送匿名使用统计（没有统计功能的版本不问）。
+ * 根界面调用一次；顺便统计根界面正在看的页面：翻译，或者某个模块的首页。
+ */
+@Composable
+fun AnalyticsConsentPrompt(page: String) {
+    val context = LocalContext.current
+    var asking by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!Analytics.isAvailable || Analytics.consent != null) return@LaunchedEffect
+        delay(1000)
+        asking = true
+    }
+    AnalyticsPage(page)
+    if (asking) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("帮助改进快译") },
+            text = { Text("允许发送匿名使用统计吗？只统计用了哪些功能（比如查词、拍照翻译、同声传译），不包含你输入的文字、图片和录音。统计由友盟+处理，随时可以在设置里关闭。") },
+            confirmButton = {
+                TextButton(onClick = { asking = false; Analytics.updateConsent(context, true) }) { Text("允许") }
+            },
+            dismissButton = {
+                TextButton(onClick = { asking = false; Analytics.updateConsent(context, false) }) { Text("不允许") }
+            },
+        )
+    }
+}
+
+/**
+ * 和友盟 SDK 打交道的唯一入口。
+ * 启动时只 preInit（按友盟的合规要求，不采集任何信息）；用户同意后才 init、才上报。
+ * AppKey 在编译时从 android/local.properties 读进 BuildConfig，平板和手机分开统计，没填平板的就用手机的。
  */
 internal object UmengBridge {
-    val isAvailable: Boolean get() = false
-    fun preInit(context: Context) {}
-    fun start(context: Context) {}
-    fun stop() {}
-    fun event(id: String, attributes: Map<String, String>) {}
-    fun pageStart(name: String) {}
-    fun pageEnd(name: String) {}
+    private const val CHANNEL = "Android"
+    private lateinit var appContext: Context
+    private var key = ""
+    private var started = false
+    /** 用户关掉了统计：这次运行里不再上报，重新打开要等下次启动 */
+    private var disabled = false
+
+    val isAvailable: Boolean get() = key.isNotEmpty()
+
+    private fun appKey(context: Context): String {
+        val phone = BuildConfig.UMENG_APPKEY.trim()
+        val tablet = BuildConfig.UMENG_APPKEY_TABLET.trim()
+        val isTablet = context.resources.configuration.smallestScreenWidthDp >= 600
+        return if (isTablet && tablet.isNotEmpty()) tablet else phone
+    }
+
+    fun preInit(context: Context) {
+        appContext = context.applicationContext
+        key = appKey(appContext)
+        if (!isAvailable) return
+        UMConfigure.setLogEnabled(BuildConfig.DEBUG)
+        UMConfigure.preInit(appContext, key, CHANNEL)
+    }
+
+    fun start(context: Context) {
+        if (!isAvailable || started) return
+        started = true
+        UMConfigure.submitPolicyGrantResult(appContext, true)
+        // 只有一个 Activity，页面由界面手动报告（翻译、设置、各模块）
+        MobclickAgent.setPageCollectionMode(MobclickAgent.PageMode.MANUAL)
+        // 初始化要读写文件，放到后台线程
+        Thread { UMConfigure.init(appContext, key, CHANNEL, UMConfigure.DEVICE_TYPE_PHONE, "") }.start()
+    }
+
+    fun stop() {
+        if (!started || disabled) return
+        disabled = true
+        UMConfigure.submitPolicyGrantResult(appContext, false)
+        MobclickAgent.disable()
+    }
+
+    private val enabled get() = started && !disabled
+
+    fun event(id: String, attributes: Map<String, String>) {
+        if (!enabled) return
+        if (attributes.isEmpty()) MobclickAgent.onEvent(appContext, id) else MobclickAgent.onEvent(appContext, id, attributes)
+    }
+
+    fun pageStart(name: String) {
+        if (enabled) MobclickAgent.onPageStart(name)
+    }
+
+    fun pageEnd(name: String) {
+        if (enabled) MobclickAgent.onPageEnd(name)
+    }
 }

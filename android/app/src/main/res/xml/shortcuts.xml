@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 桌面长按图标的快捷方式：和 iPhone 的主屏快捷操作一样 -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="interpret"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_interpret"
+        android:shortcutShortLabel="@string/shortcut_interpret">
+        <intent
+            android:action="com.yishulabs.qtranslator.SHORTCUT"
+            android:targetClass="com.yishulabs.qtranslator.MainActivity"
+            android:targetPackage="com.yishulabs.qtranslator">
+            <extra android:name="type" android:value="interpret" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="face"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_face"
+        android:shortcutShortLabel="@string/shortcut_face">
+        <intent
+            android:action="com.yishulabs.qtranslator.SHORTCUT"
+            android:targetClass="com.yishulabs.qtranslator.MainActivity"
+            android:targetPackage="com.yishulabs.qtranslator">
+            <extra android:name="type" android:value="face" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="practice"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_practice"
+        android:shortcutShortLabel="@string/shortcut_practice">
+        <intent
+            android:action="com.yishulabs.qtranslator.SHORTCUT"
+            android:targetClass="com.yishulabs.qtranslator.MainActivity"
+            android:targetPackage="com.yishulabs.qtranslator">
+            <extra android:name="type" android:value="practice" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="new"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_new"
+        android:shortcutShortLabel="@string/shortcut_new">
+        <intent
+            android:action="com.yishulabs.qtranslator.SHORTCUT"
+            android:targetClass="com.yishulabs.qtranslator.MainActivity"
+            android:targetPackage="com.yishulabs.qtranslator">
+            <extra android:name="type" android:value="new" />
+        </intent>
+    </shortcut>
+</shortcuts>

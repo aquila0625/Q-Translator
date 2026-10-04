@@ -1,5 +1,6 @@
 package com.yishulabs.qtranslator.ui
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
@@ -22,6 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -39,7 +41,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,35 +54,48 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yishulabs.qtranslator.BuildConfig
 import com.yishulabs.qtranslator.ai.AIClient
 import com.yishulabs.qtranslator.ai.AIProvider
 import com.yishulabs.qtranslator.ai.AISettings
 import com.yishulabs.qtranslator.ai.Pricing
 import com.yishulabs.qtranslator.ai.UsageStore
-import com.yishulabs.qtranslator.core.OfflineTranslator
+import com.yishulabs.qtranslator.analytics.Analytics
+import com.yishulabs.qtranslator.analytics.AnalyticsPage
 import com.yishulabs.qtranslator.core.Prefs
+import com.yishulabs.qtranslator.core.VoiceInput
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
-/** 设置：AI 服务商和 key、累计用量和报表、朗读、翻译来源。往下拉关闭。 */
+/** 设置里的子页面 */
+private enum class SettingsPage { MAIN, REPORT, VOICES, OFFLINE }
+
+/** 设置：外观、离线模型、AI 服务商和 key、累计用量和报表、各功能的选项、朗读、翻译来源、隐私。往下拉关闭。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsSheet(onDismiss: () -> Unit) {
-    var showReport by remember { mutableStateOf(false) }
+    var page by remember { mutableStateOf(SettingsPage.MAIN) }
+    AnalyticsPage("设置")
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = Lx.colors.background,
     ) {
-        BackHandler(enabled = showReport) { showReport = false }
+        BackHandler(enabled = page != SettingsPage.MAIN) { page = SettingsPage.MAIN }
         Column(Modifier.fillMaxHeight(0.92f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
-            if (showReport) UsageReport(onBack = { showReport = false }) else SettingsMain(onReport = { showReport = true })
+            val back = { page = SettingsPage.MAIN }
+            when (page) {
+                SettingsPage.MAIN -> SettingsMain(onPage = { page = it })
+                SettingsPage.REPORT -> UsageReport(onBack = back)
+                SettingsPage.VOICES -> SpeechVoicesPage(onBack = back)
+                SettingsPage.OFFLINE -> OfflineModelsPage(onBack = back)
+            }
         }
     }
 }
 
 @Composable
-private fun SettingsMain(onReport: () -> Unit) {
+private fun SettingsMain(onPage: (SettingsPage) -> Unit) {
     val colors = Lx.colors
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -89,11 +103,23 @@ private fun SettingsMain(onReport: () -> Unit) {
     var modelMenu by remember { mutableStateOf(false) }
     var testing by remember { mutableStateOf(false) }
     var testResult by remember { mutableStateOf<String?>(null) }
-    var offlineReady by remember { mutableStateOf<Boolean?>(null) }
-    LaunchedEffect(Unit) { offlineReady = OfflineTranslator.isReady() }
+    val settings = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
+    var interpreterFromChinese by remember { mutableStateOf(settings.getBoolean("interpreter.sourceIsChinese", false)) }
 
     Text("设置", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = colors.ink)
     Spacer(Modifier.height(16.dp))
+
+    Group("外观") {
+        ChoiceRow("主题", listOf(0 to "跟随系统", 1 to "浅色", 2 to "深色"), Prefs.appearance) { Prefs.updateAppearance(it) }
+    }
+
+    Group(null) {
+        SettingRow("离线翻译和语音识别模型", onClick = { onPage(SettingsPage.OFFLINE) }) {
+            Icon(Icons.Rounded.Download, null, tint = colors.accent)
+            Icon(Icons.Rounded.ChevronRight, null, tint = colors.ink3)
+        }
+    }
+    Footnote("下载后不用联网、不限量，翻译和同声传译都会快很多。")
 
     Group("AI 增强（可选）") {
         Box {
@@ -102,13 +128,14 @@ private fun SettingsMain(onReport: () -> Unit) {
                 AIProvider.entries.forEach { p ->
                     DropdownMenuItem(text = { Text(p.title) }, onClick = {
                         providerMenu = false
+                        if (p != AISettings.provider) Analytics.track(Analytics.Event.SETTINGS_AI_PROVIDER, mapOf("provider" to p.key))
                         AISettings.updateProvider(p)
                         testResult = null
                     })
                 }
             }
         }
-        Divider()
+        SettingsDivider()
         OutlinedTextField(
             AISettings.apiKey, { AISettings.updateApiKey(it) }, label = { Text("API Key") }, singleLine = true,
             visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth().padding(12.dp),
@@ -118,7 +145,7 @@ private fun SettingsMain(onReport: () -> Unit) {
                 "去 ${AISettings.provider.title} 注册并获取 API Key", color = colors.accent, fontSize = 15.sp,
                 modifier = Modifier.fillMaxWidth().clickable { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }.padding(16.dp),
             )
-            Divider()
+            SettingsDivider()
         }
         if (AISettings.provider == AIProvider.CUSTOM) {
             OutlinedTextField(
@@ -141,16 +168,16 @@ private fun SettingsMain(onReport: () -> Unit) {
                     }
                 }
             }
-            Divider()
+            SettingsDivider()
         }
         OutlinedTextField(
             AISettings.model, { AISettings.updateModel(it) }, label = { Text("或手动填写模型名称") }, singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(12.dp),
         )
         SettingRow("AI 优化：新会话默认开启") { Switch(AISettings.autoCalibrate, { AISettings.updateAutoCalibrate(it) }) }
-        Divider()
+        SettingsDivider()
         SettingRow("在译文下显示每次消耗的 token") { Switch(Prefs.showAIUsage, { Prefs.updateShowAIUsage(it) }) }
-        Divider()
+        SettingsDivider()
         SettingRow("测试连接", value = testResult, enabled = !testing && AISettings.isConfigured, onClick = {
             testing = true
             testResult = null
@@ -164,7 +191,7 @@ private fun SettingsMain(onReport: () -> Unit) {
                 testing = false
             }
         }) { if (testing) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) }
-        Divider()
+        SettingsDivider()
         val summary = UsageStore.summarize(UsageStore.records(AISettings.provider))
         SettingRow(
             "${AISettings.provider.title} 累计用量",
@@ -175,51 +202,106 @@ private fun SettingsMain(onReport: () -> Unit) {
                 else -> "无价格数据"
             },
         )
-        Divider()
-        SettingRow("用量报表", onClick = onReport) { Icon(Icons.Rounded.ChevronRight, null, tint = colors.ink3) }
+        SettingsDivider()
+        SettingRow("用量报表", onClick = { onPage(SettingsPage.REPORT) }) { Icon(Icons.Rounded.ChevronRight, null, tint = colors.ink3) }
     }
     Footnote(
         "Q-Translator 不提供 AI 额度，也不经过任何中间服务器：你自己在服务商那里注册，把 API Key 填在这里，费用由服务商向你收取。" +
             "Key 只加密保存在本机。注意 ChatGPT 的会员订阅不包含 API 额度，API Key 要在 OpenAI 开发者平台单独申请。" +
-            "不填也能使用词典、翻译、朗读和图片翻译。单词和短语只查词典，不用 AI。token 用量默认不显示在译文下面，可以在用量报表里查看。"
+            "不填也能使用词典、翻译、朗读和图片翻译。AI 用于优化句子翻译和帮你写回复。单词和短语只查词典，不用 AI。" +
+            "token 用量默认不显示在译文下面，可以在用量报表里查看。"
     )
 
-    Group("朗读") {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("默认英文口音", modifier = Modifier.weight(1f), color = colors.ink)
-            SingleChoiceSegmentedButtonRow {
-                listOf(1 to "英式", 2 to "美式").forEachIndexed { index, (value, label) ->
-                    SegmentedButton(Prefs.accent == value, { Prefs.updateAccent(value) }, SegmentedButtonDefaults.itemShape(index, 2)) { Text(label) }
-                }
-            }
+    Group("语音输入") {
+        SettingRow("说完自动翻译") { Switch(Prefs.voiceAutoSend, { Prefs.updateVoiceAutoSend(it) }) }
+        SettingsDivider()
+        ChoiceRow(
+            "“自动”方向时先听",
+            listOf(VoiceInput.Language.ENGLISH to "英语", VoiceInput.Language.CHINESE to "中文"),
+            VoiceInput.language,
+        ) {
+            // VoiceInput 只提供切换：不在听的时候切换一下就是改默认语言（会保存）
+            if (it != VoiceInput.language && !VoiceInput.isListening) VoiceInput.switchLanguage()
         }
-        Divider()
+    }
+    Footnote("关闭“说完自动翻译”时，说的话先放进输入框，可以改完再翻译。翻译方向选了中→英或英→中时，按方向识别；正在听的时候也可以点一下切换。")
+
+    Group("同声传译") {
+        ChoiceRow("默认方向", listOf(false to "英 → 中", true to "中 → 英"), interpreterFromChinese) {
+            interpreterFromChinese = it
+            settings.edit().putBoolean("interpreter.sourceIsChinese", it).apply()
+        }
+        SettingsDivider()
+        SettingRow("默认朗读译文（建议戴耳机）") { Switch(Prefs.interpreterSpeak, { Prefs.updateInterpreterSpeak(it) }) }
+    }
+
+    Group("面对面对话") {
+        SettingRow("翻译后朗读出来") { Switch(Prefs.dialogSpeak, { Prefs.updateDialogSpeak(it) }) }
+    }
+
+    Group("朗读") {
+        SpeechSpeedRow()
+        SettingsDivider()
+        ChoiceRow("默认英文口音", listOf(1 to "英式", 2 to "美式"), Prefs.accent) { Prefs.updateAccent(it) }
+        SettingsDivider()
         SettingRow("查词后自动朗读") { Switch(Prefs.autoSpeak, { Prefs.updateAutoSpeak(it) }) }
+        SettingsDivider()
+        SettingRow("音色", onClick = { onPage(SettingsPage.VOICES) }) { Icon(Icons.Rounded.ChevronRight, null, tint = colors.ink3) }
     }
 
     Group("翻译来源") {
         SettingRow("单词", value = "有道词典（在线）")
-        Divider()
-        SettingRow(
-            "句子和段落", value = "本机离线翻译，其次 MyMemory",
-            subtitle = when (offlineReady) {
-                true -> "离线模型已下载"
-                false -> "离线模型还没下载，翻译时会提示下载（约 30 MB）"
-                null -> null
-            },
-        )
-        Divider()
+        SettingsDivider()
+        SettingRow("句子和段落", value = "本机离线翻译，其次 MyMemory")
+        SettingsDivider()
         SettingRow("图片文字", value = "本机识别，不上传")
+        SettingsDivider()
+        SettingRow("语音", value = "系统语音识别，优先本机")
     }
     Footnote("先用离线和免费的来源，AI 只在你填了 Key 之后作为补充。")
 
+    if (Analytics.isAvailable) {
+        Group("隐私") {
+            SettingRow("发送匿名使用统计") {
+                Switch(Analytics.consent == true, { Analytics.updateConsent(context, it) })
+            }
+        }
+        Footnote("只统计用了哪些功能，帮助改进快译；不包含你输入的文字、图片和录音。统计由友盟+处理。")
+    }
+
     Group("关于") {
-        SettingRow("版本", value = "0.2.0")
-        Divider()
+        SettingRow("版本", value = BuildConfig.VERSION_NAME)
+        SettingsDivider()
         SettingRow("源代码（MIT 许可）", onClick = {
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/aquila0625/Q-Translator")))
         }) { Icon(Icons.Rounded.ChevronRight, null, tint = colors.ink3) }
     }
+}
+
+/** 一行标题加分段选择，例如主题、口音 */
+@Composable
+fun <T> ChoiceRow(title: String, options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, modifier = Modifier.weight(1f), color = Lx.colors.ink)
+        SingleChoiceSegmentedButtonRow {
+            options.forEachIndexed { index, (value, label) ->
+                // 不显示勾：“跟随系统”这样的四个字也放得下
+                SegmentedButton(selected == value, { onSelect(value) }, SegmentedButtonDefaults.itemShape(index, options.size), icon = {}) {
+                    Text(label, maxLines = 1, fontSize = 13.sp)
+                }
+            }
+        }
+    }
+}
+
+/** 子页面的标题栏：返回设置 */
+@Composable
+fun SettingsPageHeader(title: String, onBack: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "返回设置", tint = Lx.colors.accent) }
+        Text(title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Lx.colors.ink)
+    }
+    Spacer(Modifier.height(12.dp))
 }
 
 /** 用量报表：按天统计，可以看最近一周或本月，可以按服务商筛选 */
@@ -247,11 +329,7 @@ private fun UsageReport(onBack: () -> Unit) {
     val totals = days.map { start -> records.filter { it.date >= start && it.date < start + dayMs }.sumOf { it.total } }
     val summary = UsageStore.summarize(records)
 
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "返回设置", tint = colors.accent) }
-        Text("用量报表", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = colors.ink)
-    }
-    Spacer(Modifier.height(12.dp))
+    SettingsPageHeader("用量报表", onBack)
     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
         SegmentedButton(!month, { month = false }, SegmentedButtonDefaults.itemShape(0, 2)) { Text("周") }
         SegmentedButton(month, { month = true }, SegmentedButtonDefaults.itemShape(1, 2)) { Text("月") }
@@ -267,11 +345,11 @@ private fun UsageReport(onBack: () -> Unit) {
                 AIProvider.entries.forEach { p -> DropdownMenuItem(text = { Text(p.title) }, onClick = { provider = p; providerMenu = false }) }
             }
         }
-        Divider()
+        SettingsDivider()
         SettingRow("token 合计", value = summary.total.toString())
-        Divider()
+        SettingsDivider()
         SettingRow("输入 / 输出", value = "${summary.input} / ${summary.output}")
-        Divider()
+        SettingsDivider()
         SettingRow("估算费用", value = when {
             summary.total == 0 -> "—"
             summary.cost == 0.0 && summary.hasUnpriced -> "无价格数据"
@@ -309,7 +387,7 @@ private fun UsageReport(onBack: () -> Unit) {
     if (byModel.isNotEmpty()) {
         Group("按模型") {
             byModel.forEachIndexed { index, (model, s) ->
-                if (index > 0) Divider()
+                if (index > 0) SettingsDivider()
                 SettingRow(model, value = "${s.total} tokens", subtitle = if (s.cost > 0) "约 " + Pricing.format(s.cost) else "无价格数据")
             }
         }
@@ -357,7 +435,7 @@ fun SettingRow(
 }
 
 @Composable
-private fun Divider() = HorizontalDivider(Modifier.padding(start = 16.dp), color = Lx.colors.line)
+fun SettingsDivider() = HorizontalDivider(Modifier.padding(start = 16.dp), color = Lx.colors.line)
 
 @Composable
 fun Footnote(text: String) {

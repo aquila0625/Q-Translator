@@ -1,3 +1,8 @@
 <resources>
     <string name="app_name">Q-Translator</string>
+    <!-- 桌面长按图标的快捷方式 -->
+    <string name="shortcut_interpret">Interpreter</string>
+    <string name="shortcut_face">Face to Face</string>
+    <string name="shortcut_practice">Scene Practice</string>
+    <string name="shortcut_new">New Translation</string>
 </resources>
