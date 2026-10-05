@@ -7,6 +7,10 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+val local = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+}
+
 android {
     namespace = "com.yishulabs.qtranslator"
     compileSdk = 35
@@ -22,12 +26,28 @@ android {
         //   UMENG_APPKEY_ANDROID=手机用的 AppKey
         //   UMENG_APPKEY_ANDROID_TABLET=平板用的 AppKey（可选，不填就用手机的）
         // 两个 AppKey 在友盟后台分别建 Android 应用获取。不填时不初始化友盟、不发任何统计，设置里也不显示统计开关。
-        val local = Properties().apply {
-            rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
-        }
         fun key(name: String) = "\"" + (local.getProperty(name) ?: "").trim() + "\""
         buildConfigField("String", "UMENG_APPKEY", key("UMENG_APPKEY_ANDROID"))
         buildConfigField("String", "UMENG_APPKEY_TABLET", key("UMENG_APPKEY_ANDROID_TABLET"))
+    }
+
+    // 发布签名：官网的 APK 和 Google Play 必须用同一把密钥，这样才是同一个应用（用户可以互相覆盖升级）。
+    // 密钥文件和密码都不进仓库，写在 android/local.properties（或同名环境变量）里：
+    //   QT_KEYSTORE_FILE=/绝对路径/qtranslator-release.jks
+    //   QT_KEYSTORE_PASSWORD=...
+    //   QT_KEY_ALIAS=...
+    //   QT_KEY_PASSWORD=...
+    // 没填时用调试证书签名，方便自己编译安装，但这样的包不能发布。
+    val releaseKeystore = (local.getProperty("QT_KEYSTORE_FILE") ?: System.getenv("QT_KEYSTORE_FILE"))?.trim().orEmpty()
+    signingConfigs {
+        if (releaseKeystore.isNotEmpty()) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = local.getProperty("QT_KEYSTORE_PASSWORD") ?: System.getenv("QT_KEYSTORE_PASSWORD")
+                keyAlias = local.getProperty("QT_KEY_ALIAS") ?: System.getenv("QT_KEY_ALIAS")
+                keyPassword = local.getProperty("QT_KEY_PASSWORD") ?: System.getenv("QT_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -35,8 +55,8 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // 开源版本用调试证书签名，方便自己编译安装；上架时换成自己的证书
-            signingConfig = signingConfigs.getByName("debug")
+            // 配了发布密钥就用它签名；没配就用调试证书（只能自己安装，不能发布）
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
     compileOptions {

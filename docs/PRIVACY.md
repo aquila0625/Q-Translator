@@ -1,27 +1,27 @@
-# Q-Translator privacy policy
+# 快译 隐私协议
 
-**English** | [简体中文](PRIVACY.zh-CN.md)
+**简体中文** | [English](PRIVACY.en.md)
 
-## What we collect
+## 我们收集什么
 
-To learn which features are useful and improve the app, Q-Translator collects anonymous usage data: which features you use (for example word lookup, translation, photo translation, live interpretation, face to face, scene practice), how long and how often you use them, your device model, system version and app version. This data cannot identify you.
+为了了解哪些功能有用、把快译做得更好，快译会收集匿名的使用数据：你使用了哪些功能（例如查词、翻译、拍照翻译、同声传译、面对面对话、场景练习）、功能的使用时长和次数、你的设备型号、系统版本和 App 版本。这些数据不能识别你是谁。
 
-## What we do not collect
+## 我们不收集什么
 
-What you type or say, the text you translate, the photos you take or pick, recordings, the contents of your conversations and records, your word list and your API keys are never sent to us or to the analytics provider.
+你输入或说出的内容、翻译的文字、拍摄或选择的图片、录音、会话和记录的内容、生词本、你的 API Key，都不会上传给我们或统计服务商。
 
-## Who processes the data
+## 数据交给谁处理
 
-Usage data is processed by the analytics service of Umeng (友盟+); see Umeng's privacy policy. Q-Translator has no server of its own.
+使用数据由友盟+（Umeng）提供的统计服务处理，详见友盟+的隐私政策。快译没有自己的服务器。
 
-## Where your content lives
+## 你的内容在哪里
 
-Conversations, photos, recordings and records are stored only on your device and are deleted with the app. Translation and AI features send the text to be translated to the translation service, or to the AI provider whose key you entered, as you choose.
+会话、图片、录音和各种记录只保存在你的设备上，删除 App 就会一起删除。翻译和 AI 功能会按你的选择，把需要翻译的文字发给翻译服务或你自己填写的 AI 服务商。
 
-## Your choice
+## 你的选择
 
-Q-Translator collects anonymous usage data by default. You can turn it off at any time in Settings › 关于 (About) › 隐私协议; every feature keeps working and nothing is collected afterwards.
+快译默认统计匿名使用数据。你可以随时在“设置 → 关于 → 隐私协议”里关闭，关闭后快译的全部功能照常使用，只是不再统计。
 
-## Builds from source
+## 从源码编译的版本
 
-Builds from source contain no analytics keys and collect no usage data.
+从源码编译的版本不含统计 Key，不收集任何使用数据。

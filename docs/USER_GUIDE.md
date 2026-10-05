@@ -1,288 +1,295 @@
-# Q-Translator user guide
+# 快译 使用说明
 
-**English** | [简体中文](USER_GUIDE.zh-CN.md) · [Back to the project](../README.md)
+**简体中文** | [English](USER_GUIDE.en.md) · [返回项目首页](../README.md)
 
-This guide uses the iPhone app; the Mac and iPad apps work the same way. The app's interface is in Chinese, so Chinese button names are given in brackets. Mac hotkeys are in [section 7](#7-mac-hotkeys).
+这份说明以 iPhone 为例，Mac 和 iPad 的操作基本一样。Mac 特有的快捷键见[第 7 节](#7-mac-的快捷键)。
 
-**Contents**
+**目录**
 
-1. [Getting started](#1-getting-started)
-2. [Translating words, sentences, speech and photos](#2-translating-words-sentences-speech-and-photos)
-3. [Conversations, scenes and the word list](#3-conversations-scenes-and-the-word-list)
-4. [The three scenario modules](#4-the-three-scenario-modules)
-5. [AI features and API keys](#5-ai-features-and-api-keys)
-6. [Reading aloud, voices and offline models](#6-reading-aloud-voices-and-offline-models)
-7. [Mac hotkeys](#7-mac-hotkeys)
-8. [FAQ](#8-faq)
+1. [开始使用](#1-开始使用)
+2. [翻译：单词、句子、语音和图片](#2-翻译单词句子语音和图片)
+3. [会话、场景和生词本](#3-会话场景和生词本)
+4. [三个场景模块](#4-三个场景模块)
+5. [AI 功能和 API Key](#5-ai-功能和-api-key)
+6. [朗读、音色和离线模型](#6-朗读音色和离线模型)
+7. [Mac 的快捷键](#7-mac-的快捷键)
+8. [常见问题](#8-常见问题)
 
 ---
 
-## 1. Getting started
+## 1. 开始使用
 
-The app opens on a translation conversation. Type in the box at the bottom; there is no language to pick: English is translated into Chinese and Chinese into English.
+打开快译，就是一个翻译会话，直接在下面的输入框里输入就行，不用先选语言：输入英文翻成中文，输入中文翻成英文。
 
-The privacy policy is in Settings › 关于 (About) › 隐私协议; see also the [privacy policy](PRIVACY.md).
+隐私协议在“设置 → 关于 → 隐私协议”里，详见[隐私协议](PRIVACY.md)。
 
-Everything except a few AI features works without an API key: dictionary, sentence and photo translation, voice input, reading aloud, live interpretation and face to face. Scene practice, AI polishing, reply drafting, AI voices and interpretation summaries need a key; see [section 5](#5-ai-features-and-api-keys).
+不填任何 API Key 也能用：查词、句子翻译、拍照翻译、语音输入、朗读、同声传译和面对面对话都不需要 AI。只有场景练习、AI 优化、写回复、AI 音色和传译要点要用 AI，见[第 5 节](#5-ai-功能和-api-key)。
 
-## 2. Translating words, sentences, speech and photos
+## 2. 翻译：单词、句子、语音和图片
 
-<img src="images/chat.png" width="300" align="right" alt="A translation conversation">
+<img src="images/chat.png" width="300" align="right" alt="翻译会话">
 
-**The input bar**, left to right:
+**输入栏**（屏幕最下面），从左到右：
 
-| Button | What it does |
+| 按钮 | 作用 |
 | --- | --- |
-| Camera | Take a photo to translate |
-| Photos | Pick images from the library (several at once) |
-| ··· | Pick an image file, or paste text or an image |
-| 自动 (Auto) | Direction: auto / English → Chinese / Chinese → English |
-| AI 优化 (AI polish) | Polish every sentence in this conversation with AI (needs a key) |
-| Mic / Send | The microphone when the box is empty, Send when it is not |
+| 相机 | 拍照翻译 |
+| 相册 | 从相册选图片，可以一次选多张 |
+| ··· | 从文件选择图片，或粘贴剪贴板里的文字、图片 |
+| 自动 | 翻译方向：自动识别 / 英 → 中 / 中 → 英，点一下切换 |
+| AI 优化 | 这个会话里翻译句子后，自动用 AI 优化译文（需要 API Key） |
+| 麦克风 / 发送 | 输入框空着时是麦克风，有内容时变成发送 |
 
-**Words** appear as a dictionary card with UK and US phonetics (tap the speaker for real-person audio) and the main meanings. Tap 完整词条 (full entry) for every sense with examples, phrases, synonym notes and etymology; tap the star to keep the word.
+**单词**会显示成一张词典卡片：英式和美式音标，点喇叭听真人发音，下面是常用释义。点“完整词条”看全部例句、搭配、辨析和词源，点右上角的星标加入生词本。
 
-**Sentences and paragraphs** appear in a green card with the original above and the translation below, each with a copy button. The buttons underneath:
+**句子和段落**显示在绿色卡片里，上面是原文，下面是译文，两边都有复制按钮。下面一排按钮：
 
-- read the translation aloud;
-- swap (translate the translation back);
-- reply (let AI draft a reply as a text message or an email);
-- AI (polish this sentence).
+- 朗读译文
+- 对调：把译文当原文再翻译一次
+- 写回复：AI 帮你写回复，用于短信和邮件
+- AI：用 AI 优化这一句
 
-The source of the translation is shown at the bottom of the card.
+卡片最下面写着这句译文来自哪里，比如“系统离线翻译”或“MyMemory 在线”。
 
 <br clear="right">
 
-<img src="images/word.png" width="260" align="right" alt="Full word entry">
+<img src="images/word.png" width="260" align="right" alt="完整词条">
 
-**Voice input**: with the box empty, tap the microphone and speak English or Chinese; the words appear as you talk. The language is shown at the bottom left; tap it to switch. Tap the red button when you are done: the text goes into the box so you can edit it before sending. Turn on Settings › 语音输入 › 说完自动翻译 to translate as soon as you stop.
+**完整词条**按“逐条释义”列出每个意思和例句，常用的在前。还有考试标签（CET6、考研、GRE…）、常用搭配和更多例句。搭配里的词可以点开继续查。
+
+**语音输入**：输入框空着时点右下角的麦克风，说英语或中文，说的话会实时变成文字。左下角显示正在识别的语言，点一下可以中英切换。说完点红色按钮，文字会放进输入框，改好再发送。如果在“设置 → 语音输入”里打开了“说完自动翻译”，说完会直接翻译。
 
 <br clear="right">
 
 <p>
-<img src="images/voice-input.png" width="240" alt="Voice input (design)">
-<img src="images/image-translate.png" width="240" alt="Photo translation">
-<img src="images/image-edit.png" width="240" alt="Viewing a translated photo">
+<img src="images/voice-input.png" width="240" alt="语音输入（设计稿）">
+<img src="images/image-translate.png" width="240" alt="图片翻译">
+<img src="images/image-edit.png" width="240" alt="查看图片">
 </p>
 
-**Photo translation**
+**拍照和图片翻译**
 
-1. Tap the camera, or tap Photos and pick one or more images. They wait above the input box: tap one to preview it, long-press to reorder, tap × to remove it.
-2. With AI polish on, you can type an instruction such as "only translate the dishes".
-3. Tap Send. Text is recognised on the device and the translation is drawn over the original text, on the same background colour.
-4. Use 译文 / 原图 at the top right to switch between the translation and the original. Tap the image for full screen, with four buttons:
-   - **看原图** (show original);
-   - **重新识别** (recognise again);
-   - **旋转** (rotate; the translation turns with it, no re-recognition);
-   - **删除** (delete; you are asked to confirm).
+1. 点相机拍照，或点相册选图片（可以多选）。图片先放在输入框上方，不会马上发送：点缩略图可以预览，长按可以拖动排序，右上角的 × 可以删除。
+2. 开着“AI 优化”时，输入框里可以写要求，例如“只翻译菜名”“只要站名和时间”。
+3. 点发送。文字在本机识别，译文会用原文周围的底色，盖在原文的位置上。
+4. 图片右上角的“译文 / 原图”可以切换。点图片进入大图，底部有四个按钮：
+   - **看原图**：切换回原图；
+   - **重新识别**：这一张识别得不好时用；
+   - **旋转**：译文跟着一起转，不用重新识别；
+   - **删除**：删掉这一张，会先让你确认。
 
-## 3. Conversations, scenes and the word list
+## 3. 会话、场景和生词本
 
-<img src="images/drawer.png" width="280" align="right" alt="The drawer">
+<img src="images/drawer.png" width="280" align="right" alt="抽屉">
 
-Tap ☰ at the top left (or swipe right from the left edge) to open the drawer:
+点左上角的 ☰（或者从屏幕左边缘往右滑）打开抽屉：
 
-- **Search** across all conversations.
-- **The three modules**: live interpretation, face to face and scene practice ([section 4](#4-the-three-scenario-modules)).
-- **生词本 (word list)**: the words you starred.
-- **Conversations, grouped by scene.**
-  - **Organise**: long-press a conversation to drag it into another scene, swipe left to delete it, or tap 编辑 (edit) to reorder, rename or delete scenes.
-  - **New**: tap 新建 (new) to start a conversation and choose its scene; you can create a new scene there as well.
+- **搜索**：在所有会话里找你翻译过的内容。
+- **三个模块**：同声传译、面对面、场景练习，见[第 4 节](#4-三个场景模块)。
+- **生词本**：收藏的单词。
+- **会话列表**：按场景分组。
+  - **整理**：长按一个会话可以拖到别的场景，左滑可以删除；点“编辑”可以排序、改名，或删除场景。
+  - **新建**：点底部的“新建”新建会话，新建时可以选放在哪个场景，也可以顺便新建一个场景。
 
-Inside a conversation:
+在会话页面里：
 
-- tap its name to rename it or move it;
-- the clock button at the top right lists everything you typed; tap one to jump to it;
-- 全部 / 单词 / 句子 / 图片 filter by type;
-- the ↓ button takes you back to the newest item;
-- swipe left on any item to delete it.
+- 顶部的会话名可以点开改名或移动到别的场景；
+- 右上角的时钟按钮是**输入记录**，列出这个会话里输入过的所有内容，点一条就跳过去；
+- 顶部的“全部 / 单词 / 句子 / 图片”可以筛选；
+- 往上翻的时候，右下角会出现 ↓ 按钮，点一下回到最新一条；
+- 任何一轮都可以左滑删除。
 
 <br clear="right">
 
-## 4. The three scenario modules
+<img src="images/new-session.png" width="240" alt="新建会话">
 
-### Live interpretation (同声传译)
+## 4. 三个场景模块
+
+### 同声传译
 
 <p>
-<img src="images/interpret-home.png" width="240" alt="Interpretation home">
-<img src="images/interpret-live.png" width="240" alt="Interpreting (design)">
-<img src="images/interpret-record.png" width="240" alt="An interpretation record">
+<img src="images/interpret-home.png" width="240" alt="同声传译首页">
+<img src="images/interpret-live.png" width="240" alt="正在传译（设计稿）">
+<img src="images/interpret-record.png" width="240" alt="传译记录">
 </p>
 
-For lectures and meetings.
+听讲座、开会时用。
 
-1. Drawer › 同声传译. Choose which language to listen to, turn on 耳机朗读 if you want the translation read into your earphones, and tap 开始传译 (start).
-2. Speech is split into sentences and shown as bilingual subtitles: the original in small type, the translation below it. The sentence being spoken is highlighted and translated as it grows. Switch between bilingual, original only and translation only at the top.
-3. To change language mid-way, tap the title (同声传译 · 英 → 中 ▾) and pick the other language from the menu. Earlier subtitles are kept.
-4. **Background**: tap ⌄ at the top left to collapse the page; interpretation keeps running. A bar above the input box shows it is running; tap it to go back. It also keeps listening, translating and reading aloud when you go to the Home Screen or lock the phone.
-5. Tap the red stop button to finish. The subtitles are saved as a record.
-6. In the record list:
-   - tap 继续 (continue) to add to a record, for example after a lecture break;
-   - tap a record to read it, copy it, export it, or get an AI summary (要点);
-   - use ··· to rename or delete it.
+1. 抽屉 → 同声传译。点“英 → 中”选择听哪种语言，需要的话打开“耳机朗读”（戴耳机时把译文读给你听），然后点“开始传译”。
+2. 持续收音，自动断句。上面小字是原文，下面是译文，正在说的那句是蓝底，边说边翻。上方可以切换“对照 / 原文 / 译文”三种显示。
+3. 中途换语言：点顶部的“同声传译 · 英 → 中 ▾”，在下拉里选另一种语言。之前的字幕会保留。
+4. **收起和后台**：点左上角的 ⌄ 收起，传译会继续。在别的页面，输入框上方会出现“同声传译中”的提示条，点它回到传译。回到手机桌面、锁屏也会继续收音和翻译，开着耳机朗读时也继续读。
+5. 点红色的停止按钮结束。整段字幕存成一条记录，默认用时间命名。
+6. 在记录列表里：
+   - 点“继续”接着往这一条里录，适合讲座中间休息后继续；
+   - 点一条进入全文，可以复制、导出，或点“要点”让 AI 总结；
+   - 右上角“…”可以改名、删除。
 
-Tip: download the English and Chinese models in Settings › 离线翻译和语音识别模型 for faster, offline interpretation.
+提示：先在“设置 → 离线翻译和语音识别模型”里下载英语、中文的模型，传译会更快、更准，也不用联网。
 
-### Face to face (面对面)
+### 面对面对话
 
-<img src="images/face-to-face.png" width="240" align="right" alt="Face to face (design)">
+<img src="images/face-to-face.png" width="240" align="right" alt="面对面对话（设计稿）">
 
-1. Drawer › 面对面 › 开始对话.
-2. Put the phone flat on the table. The top half is upside down for the person opposite.
-3. Whoever speaks taps the big button on their half, and taps again when done. The translation is shown in large type and read aloud.
-4. The speaker button in the middle turns reading on or off; × ends the conversation and saves it as a record.
+1. 抽屉 → 面对面 → 开始对话。
+2. 手机平放在桌上，上半屏是倒过来的，给对面的人看。
+3. 谁说话就点自己那一半的大按钮，说完再点一下。快译会翻译成对方的语言，大字显示并朗读出来。
+4. 中间的喇叭按钮可以开关朗读。点中间的 × 结束，整段对话存成一条记录，可以回看和复制。
 
 <br clear="right">
 
-### English scene practice (场景练习, needs AI)
+### 英语场景练习（需要 AI）
 
 <p>
-<img src="images/practice-home.png" width="240" alt="Practice home">
-<img src="images/practice-record.png" width="240" alt="Practice with corrections">
+<img src="images/practice-home.png" width="240" alt="场景练习首页">
+<img src="images/practice-record.png" width="240" alt="练习对话和纠正">
 </p>
 
-1. Drawer › 场景练习. Set up an API key first ([section 5](#5-ai-features-and-api-keys)).
-2. Choose a level (beginner / intermediate / advanced) and a scene. 全部 9 个 shows all scenes, and you can also describe your own, for example "chatting with a barista".
-3. The AI plays the other side and speaks first. You can:
-   - answer by voice or text; Chinese is fine where you are stuck;
-   - tap the waveform button to switch to **voice chat**: it starts listening when the partner finishes and sends when you pause;
-   - tap 字 to show the Chinese meaning of every line, and the speaker button to toggle reading aloud or change the speed.
-4. If a sentence of yours is unnatural, a yellow "more natural" (更地道) note appears under it with the reason.
-5. Tap × to finish and see a summary: how many sentences, how many corrections, and new phrases you can add to the word list.
-6. The module page shows this week's progress, and old sessions can be reviewed or practised again.
+1. 抽屉 → 场景练习。先在设置里填好 API Key（见[第 5 节](#5-ai-功能和-api-key)）。
+2. 选难度（初级 / 中级 / 高级），点一个场景开始。“全部 9 个”里有更多场景，也可以自己描述一个，例如“在咖啡店和咖啡师聊天”。
+3. AI 扮演对方先开口。你可以：
+   - 按麦克风说英语，或者打字；不会说的部分可以先用中文；
+   - 点输入框左边的声波按钮，切换到**语音聊天**：对方说完自动开始听，你说完停顿一下自动发送，不用点按钮；
+   - 点右上角的“字”按钮，显示对方每句话的中文意思；点右上角的喇叭，开关自动朗读、调朗读速度。
+4. 说得不地道的地方，你那句下面会出现黄色的“更地道”卡片，写着更好的说法和原因。
+5. 点左上角的 × 结束，会显示小结：你说了几句、几处可以更地道、学到几个新说法。新说法可以一键加入生词本。
+6. 首页上方能看到本周的进步。练习记录可以回看纠正，也可以“再练”。
 
-On iPhone, long-press the app icon to jump straight into interpretation, face to face, practice or a new translation.
+iPhone 上长按快译的图标，可以直接进入同声传译、面对面对话、场景练习，或新建翻译。
 
-## 5. AI features and API keys
+## 5. AI 功能和 API Key
 
-### Why your own key
+### 为什么要自己的 Key
 
-Q-Translator has no AI credit and no server of its own. You create an account with an AI provider, add credit, and get an **API key** (a secret string such as `sk-…`). Paste it into the app, and the app talks to the provider directly from your device. The provider bills you for what you use.
+快译不内置任何 AI 额度，也没有自己的服务器。你在 AI 服务商那里注册账号、充值，拿到一个 **API Key**（一串以 `sk-` 等开头的密钥），填进快译。之后快译直接从你的手机连到服务商，费用由服务商按用量向你收取。
 
-- The key is stored only in the system Keychain on your device.
-- **A ChatGPT Plus or Claude Pro subscription does not include API credit**; the API is paid for separately on the developer platform.
-- Costs are usually tiny: polishing a sentence or one round of practice typically costs a fraction of a cent. Settings shows your total usage and an estimated cost.
+- Key 只保存在本机的系统钥匙串里，不会上传到别处。
+- **ChatGPT Plus 等会员订阅不包含 API 额度**，API 要在开发者平台单独充值。Claude Pro 也一样。
+- 费用一般很低：优化一句翻译、练习时的一轮对话，通常都在 1 分钱以内。设置里能看到累计用量和按标价估算的费用。
 
-### What needs AI
+### 需要 AI 的功能
 
-| Feature | Provider |
+| 功能 | 需要的服务商 |
 | --- | --- |
-| AI polish, reply drafting, photo instructions | Any |
-| English scene practice | Any |
-| Interpretation summaries | Any |
-| AI voices (most natural reading) | OpenAI (ChatGPT) key only |
+| AI 优化译文、写回复、图片翻译的要求 | 任意一家 |
+| 英语场景练习 | 任意一家 |
+| 同声传译的“要点”总结 | 任意一家 |
+| AI 音色（最像真人的朗读） | 只能用 ChatGPT（OpenAI）的 Key |
 
-### Which provider
+### 选哪一家
 
-| Provider | Good for | Sign up |
+| 服务商 | 适合 | 申请地址 |
 | --- | --- | --- |
-| **Claude (Anthropic)** | High-quality translation and writing | <https://platform.claude.com/> |
-| **ChatGPT (OpenAI)** | Also unlocks the AI voices | <https://platform.openai.com/api-keys> |
-| **DeepSeek** | Low price, strong Chinese, pay with Alipay or WeChat | <https://platform.deepseek.com/> |
-| **Custom** | Any OpenAI-compatible service (Qwen, Kimi, GLM…) | see below |
+| **DeepSeek** | 国内用户首选：支持支付宝、微信充值，价格低，中文好 | <https://platform.deepseek.com/> |
+| **ChatGPT（OpenAI）** | 想用 AI 音色；海外用户 | <https://platform.openai.com/api-keys> |
+| **Claude（Anthropic）** | 翻译和写作质量高；海外用户 | <https://platform.claude.com/> |
+| **自定义** | 通义千问、Kimi、智谱等兼容 OpenAI 接口的服务 | 见下文 |
 
-Anthropic and OpenAI are not available in every region; check that yours is supported.
+OpenAI 和 Anthropic 不向中国大陆提供服务，需要所在地区支持、并有可用的付款方式。
 
-### Getting a Claude key
+### 申请 DeepSeek 的 Key
 
-1. Go to <https://platform.claude.com/> and sign up or log in.
-2. Add credit under Billing.
-3. Under API Keys, click Create Key and give it a name.
-4. Copy the key (starts with `sk-ant-`). It is shown only once.
+1. 打开 <https://platform.deepseek.com/>，用手机号注册并登录。
+2. 左侧点“充值”，用支付宝或微信充一点钱（几块钱就能用很久）。
+3. 左侧点“API keys” → “创建 API key”，起个名字，例如“快译”。
+4. 复制生成的 Key（以 `sk-` 开头）。**它只显示这一次**，先保存好。
 
-### Getting an OpenAI key
+### 申请 ChatGPT（OpenAI）的 Key
 
-1. Go to <https://platform.openai.com/> and sign up or log in (your ChatGPT account works).
-2. Add a payment method and credit under Settings › Billing.
-3. Open <https://platform.openai.com/api-keys> and click Create new secret key.
-4. Copy the key (starts with `sk-`). It is shown only once.
+1. 打开 <https://platform.openai.com/>，注册或登录（和 ChatGPT 是同一个账号也可以）。
+2. 进入 Settings → Billing，绑定银行卡并充值（Add credit）。
+3. 打开 <https://platform.openai.com/api-keys>，点“Create new secret key”，起个名字。
+4. 复制 Key（以 `sk-` 开头），只显示一次。
 
-### Getting a DeepSeek key
+### 申请 Claude 的 Key
 
-1. Go to <https://platform.deepseek.com/> and sign up.
-2. Top up under 充值 (Alipay and WeChat Pay are accepted).
-3. Under API keys, click 创建 API key.
-4. Copy the key (starts with `sk-`). It is shown only once.
+1. 打开 <https://platform.claude.com/>，注册或登录。
+2. 在 Billing 里充值（Buy credits）。
+3. 在 API Keys 里点“Create Key”，起个名字。
+4. 复制 Key（以 `sk-ant-` 开头），只显示一次。
 
-### Other OpenAI-compatible services
+### 使用其他兼容的服务（自定义）
 
-Choose 自定义 (Custom) as the provider and fill in the key, the base URL and the model name. Common base URLs:
+在“服务商”里选“自定义”，需要填三项：服务商给的 Key、接口地址、模型名称。常见的接口地址：
 
-| Service | Base URL | Get a key |
+| 服务 | 接口地址 | 申请 Key |
 | --- | --- | --- |
-| Qwen (Alibaba Cloud Model Studio) | `https://dashscope.aliyuncs.com/compatible-mode/v1` | <https://bailian.console.aliyun.com/> |
-| Kimi (Moonshot AI) | `https://api.moonshot.cn/v1` | <https://platform.moonshot.cn/> |
-| GLM (Zhipu) | `https://open.bigmodel.cn/api/paas/v4` | <https://open.bigmodel.cn/> |
+| 通义千问（阿里云百炼） | `https://dashscope.aliyuncs.com/compatible-mode/v1` | <https://bailian.console.aliyun.com/> |
+| Kimi（月之暗面） | `https://api.moonshot.cn/v1` | <https://platform.moonshot.cn/> |
+| 智谱 GLM | `https://open.bigmodel.cn/api/paas/v4` | <https://open.bigmodel.cn/> |
 
-Find the model name in the provider's documentation (for example `qwen-plus`); model names change over time.
+模型名称请在对应服务商的文档里查，比如通义千问的 `qwen-plus`。各家的模型会不断更新，以服务商文档为准。
 
-### Entering the key in the app
-
-<p>
-<img src="images/settings-ai.png" width="240" alt="AI settings">
-<img src="images/settings-provider.png" width="240" alt="Choosing a provider">
-</p>
-
-1. Drawer › 设置 (Settings) at the bottom left › tap AI 增强 (AI enhancement). If you tap a feature that needs AI before setting a key, a dialog offers 去配置 (set up), which opens this page directly.
-2. **服务商 (Provider)**: choose the one you signed up with.
-3. **API Key**: paste your key. The link below it opens the provider's sign-up page.
-4. **模型 (Model)**: pick one from the list or type a name. The default is fine; smaller models near the top of the list cost less.
-5. Tap **测试连接 (Test connection)**. 连接正常 means it works.
-6. Optionally turn on automatic AI polishing for every sentence. When it is off, AI runs only when you tap the AI button under a sentence.
-7. Usage and estimated cost per day are in 累计用量 and 用量报表 (usage report).
-
-Each provider's key is stored separately, so switching providers does not lose a key.
-
-**Security**: never share your key or a screenshot of it. If it may have leaked, delete it in the provider's console and create a new one. Most providers let you set a monthly spending limit.
-
-## 6. Reading aloud, voices and offline models
+### 在快译里填写
 
 <p>
-<img src="images/settings-voice.png" width="240" alt="Reading settings">
-<img src="images/voices.png" width="240" alt="Voices">
+<img src="images/settings-ai.png" width="240" alt="AI 设置">
+<img src="images/settings-provider.png" width="240" alt="选择服务商">
 </p>
 
-- **Speed** (朗读速度): applies to all reading: AI voices, system voices and word audio.
-- **English accent** (默认英文口音): UK or US word audio.
-- **Voices** (音色): tap one to hear a sample.
-  - **AI voices** sound the most natural, need an OpenAI key and are billed per character (well under a cent per sentence).
-  - **System voices** are free and offline. For voices marked 需下载 (download), tap the button below the list and go to Accessibility › Spoken Content › Voices; the Premium or Enhanced versions sound best.
-- **Offline models** (离线翻译和语音识别模型): download the English and Chinese translation and speech models so translation, interpretation and face to face work offline and much faster.
-- **Appearance** (外观): follow the system, light or dark.
+1. 打开抽屉 → 左下角“设置”，点“AI 增强”进入配置页。没配置时，在别处点“AI 优化”等要用 AI 的功能，会弹出提示，点“去配置”也能直接进到这一页。
+2. **服务商**：选你注册的那家。
+3. **API Key**：把复制的 Key 粘贴进去。下面的“去 … 注册并获取 API Key”可以直接打开申请页面。
+4. **模型**：从下拉里选，也可以在下面手动填写。一般用默认的就行；想省钱选列表里靠前的小模型。
+5. 点**测试连接**，显示“连接正常”就可以了。
+6. 需要的话打开“AI 优化：翻译句子后自动优化译文”，每句翻译完都会自动用 AI 优化。不打开时，只在你点句子下面的“AI”按钮时才运行。
+7. **累计用量**和“用量报表”里可以看到每天用了多少 token、大约多少钱。
 
-## 7. Mac hotkeys
+每家服务商的 Key 是分开保存的，切换服务商不会丢失之前填的 Key。
 
-The Mac app adds a menu bar icon. These hotkeys work in any app:
+**安全提示**：不要把 Key 发给别人，也不要截图分享。觉得泄露了，就去服务商后台把它删掉，再建一个新的。可以在服务商后台设置每月消费上限。
 
-| Hotkey | Action |
+## 6. 朗读、音色和离线模型
+
+<p>
+<img src="images/settings-voice.png" width="240" alt="朗读设置">
+<img src="images/voices.png" width="240" alt="音色">
+</p>
+
+- **朗读速度**：设置 → 朗读 → 朗读速度。对所有朗读生效，包括 AI 音色、系统音色和单词的真人发音。
+- **默认英文口音**：英式或美式，影响单词的真人发音。
+- **音色**：设置 → 朗读 → 音色。点一个音色就会读一句给你试听。
+  - **AI 音色**：最像真人，需要 ChatGPT 的 Key，按字数计费，读一句大约不到 1 分钱。
+  - **系统音色**：免费、离线。标着“需下载”的，点下面的“去系统设置下载更多音色”，然后依次进入“辅助功能 → 朗读内容 → 声音”下载，选“高级”或“增强”版本更好听。
+- **离线模型**：设置 → 离线翻译和语音识别模型。下载英语、中文的翻译模型和语音识别模型后，句子翻译、同声传译和面对面对话都不用联网，也快很多。
+- **外观**：设置 → 外观 → 主题，可以选跟随系统、浅色或深色。
+
+## 7. Mac 的快捷键
+
+Mac 版除了主窗口，还在菜单栏常驻一个图标。在任何 App 里都可以用这些快捷键：
+
+| 快捷键 | 作用 |
 | --- | --- |
-| `⌥D` | Show or hide the main window |
-| `⌥F` | Translate the selected text |
-| `⌥R` | Translate the selected text and replace it with the translation |
-| `⌥V` | Translate the clipboard |
-| `⌥S` | Translate a screenshot of an area you select |
-| `⌥A` | Quick input box |
-| `⇧⌘S` | Voice input in the main window |
-| `⇧⌘I` / `⇧⌘F` / `⇧⌘P` | Open interpretation / face to face / practice (hold `⌥` to start right away) |
-| `⌘V` | Paste an image to translate; you can also drop images on the window |
+| `⌥D` | 打开或隐藏主窗口 |
+| `⌥F` | 翻译当前选中的文字 |
+| `⌥R` | 翻译选中的文字，并替换成译文（适合写邮件） |
+| `⌥V` | 翻译剪贴板里的内容 |
+| `⌥S` | 截图翻译：框选屏幕上的一块区域 |
+| `⌥A` | 弹出小输入框，快速翻译 |
+| `⇧⌘S` | 在主窗口里语音输入 |
+| `⇧⌘I` / `⇧⌘F` / `⇧⌘P` | 打开同声传译 / 面对面 / 场景练习（按住 `⌥` 直接开始） |
+| `⌘V` | 在主窗口粘贴图片翻译；也可以把图片直接拖进窗口 |
 
-The first time you use `⌥F`, `⌥R` or `⌥S`, macOS asks you to allow Accessibility and Screen Recording for Q-Translator in System Settings › Privacy & Security. You can also select text in any app, right-click, and choose Q-Translator from the Services menu.
+第一次用 `⌥F`、`⌥R`、`⌥S` 时，系统会让你在“系统设置 → 隐私与安全性”里，给快译开启“辅助功能”和“屏幕录制”权限。另外，在任何 App 里选中文字后点右键，在“服务”菜单里也能用快译翻译。
 
-## 8. FAQ
+## 8. 常见问题
 
-**Sentences say "MyMemory online" instead of on-device translation.**
-The on-device model has not been downloaded. Download English and Chinese in Settings › 离线翻译和语音识别模型. (The iOS Simulator cannot translate on device.)
+**句子翻译显示“来自 MyMemory 在线”，不是本机翻译？**
+本机的翻译模型还没下载。到“设置 → 离线翻译和语音识别模型”下载英语和中文模型即可。另外，iOS 模拟器里不支持本机翻译。
 
-**The AI connection test fails.**
-- Check that the key was copied completely, with no spaces.
-- Check that your account has credit.
-- With Custom, check the base URL and model name.
-- Make sure the provider is available in your region.
+**AI 测试连接失败？**
+- 检查 Key 有没有复制完整，前后不要有空格。
+- 检查账户里有没有余额。
+- 选“自定义”时，检查接口地址和模型名称。
+- OpenAI 和 Claude 需要在支持的地区使用。
 
-**Interpretation hears nothing.**
-Allow microphone and speech recognition for Q-Translator in the system Settings. With Bluetooth earphones, the phone's own microphone listens and the earphones only play the translation.
+**同声传译没有声音或收不到音？**
+确认已经允许快译使用麦克风和语音识别（“设置 → 快译”）。用蓝牙耳机时，收音用的是手机自己的麦克风，耳机只负责播放译文。
 
-**Where is my data?**
-On your device only: conversations, photos, recordings and records. Deleting the app deletes them.
+**场景练习提示要先填 API Key？**
+场景练习要用 AI，见[第 5 节](#5-ai-功能和-api-key)。任意一家服务商都可以。
 
-Questions and suggestions are welcome in [GitHub Issues](https://github.com/aquila0625/Q-Translator/issues).
+**我的数据存在哪里？**
+都在本机：会话、图片、录音、传译和练习记录都只保存在你的设备上。删除 App 会一起删除。
+
+有问题或建议，欢迎在 [GitHub Issues](https://github.com/aquila0625/Q-Translator/issues) 反馈。
