@@ -4,11 +4,12 @@ import UniformTypeIdentifiers
 
 /// 根界面弹出的面板：设置、新建会话、新建或编辑场景、生词本
 enum RootSheet: Identifiable {
-    case settings, newSession, newScene, editScene(UUID), starred
+    case settings, aiSettings, newSession, newScene, editScene(UUID), starred
 
     var id: String {
         switch self {
         case .settings: "settings"
+        case .aiSettings: "aiSettings"
         case .newSession: "newSession"
         case .newScene: "newScene"
         case .editScene(let id): "scene-" + id.uuidString
@@ -34,6 +35,7 @@ struct RootSheetContent: View {
     var body: some View {
         switch sheet {
         case .settings: SettingsView()
+        case .aiSettings: SettingsView(startAtAI: true)
         case .newSession: NewSessionView(controller: controller, store: controller.store)
         case .newScene: SceneEditorView(store: controller.store, sceneID: nil)
         case .editScene(let id): SceneEditorView(store: controller.store, sceneID: id)
@@ -45,6 +47,10 @@ struct RootSheetContent: View {
 extension Notification.Name {
     /// 菜单里的“设置…”
     static let openSettings = Notification.Name("QTranslator.openSettings")
+    /// 直接打开设置里的 AI 增强页
+    static let openAISettings = Notification.Name("QTranslator.openAISettings")
+    /// 点了要用 AI 的功能，但还没配置：弹出提示，可以直接去配置
+    static let needAI = Notification.Name("QTranslator.needAI")
 }
 
 /// 宽屏布局（Mac、iPad）：左边常驻场景和会话，中间是会话，右边是输入记录
@@ -113,6 +119,7 @@ struct WideRootView: View {
         .analyticsStart()
         #endif
         .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in sheet = .settings }
+        .modifier(AINeededPrompt(open: { sheet = .aiSettings }))
     }
 }
 
@@ -146,5 +153,23 @@ enum ImageDrop {
                 continuation.resume(returning: url)
             }
         }
+    }
+}
+
+/// 还没配置 AI 就点了要用 AI 的功能：提示需要 API Key，点按钮直接进 AI 增强页
+struct AINeededPrompt: ViewModifier {
+    let open: () -> Void
+    @State private var showing = false
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .needAI)) { _ in showing = true }
+            .onReceive(NotificationCenter.default.publisher(for: .openAISettings)) { _ in open() }
+            .alert("需要先配置 AI", isPresented: $showing) {
+                Button("取消", role: .cancel) {}
+                Button("去配置") { open() }
+            } message: {
+                Text("这个功能要用 AI。先填写一个服务商的 API Key（Claude、ChatGPT、DeepSeek 都可以），填好后就能用了。")
+            }
     }
 }

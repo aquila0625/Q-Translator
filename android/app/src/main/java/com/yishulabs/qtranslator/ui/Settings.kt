@@ -74,25 +74,26 @@ import kotlinx.coroutines.launch
 import java.util.Calendar
 
 /** 设置里的子页面 */
-private enum class SettingsPage { MAIN, REPORT, VOICES, OFFLINE }
+private enum class SettingsPage { MAIN, AI, REPORT, VOICES, OFFLINE }
 
 /** 设置：外观、离线模型、AI 服务商和 key、累计用量和报表、各功能的选项、朗读、翻译来源、隐私。往下拉关闭。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsSheet(onDismiss: () -> Unit) {
-    var page by remember { mutableStateOf(SettingsPage.MAIN) }
+fun SettingsSheet(onDismiss: () -> Unit, startAtAI: Boolean = false) {
+    var page by remember { mutableStateOf(if (startAtAI) SettingsPage.AI else SettingsPage.MAIN) }
     AnalyticsPage("设置")
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = Lx.colors.background,
     ) {
-        BackHandler(enabled = page != SettingsPage.MAIN) { page = SettingsPage.MAIN }
+        BackHandler(enabled = page != SettingsPage.MAIN) { page = if (page == SettingsPage.REPORT) SettingsPage.AI else SettingsPage.MAIN }
         Column(Modifier.fillMaxHeight(0.92f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
             val back = { page = SettingsPage.MAIN }
             when (page) {
                 SettingsPage.MAIN -> SettingsMain(onPage = { page = it })
-                SettingsPage.REPORT -> UsageReport(onBack = back)
+                SettingsPage.AI -> AISettingsPage(onBack = back, onPage = { page = it })
+                SettingsPage.REPORT -> UsageReport(onBack = { page = SettingsPage.AI })
                 SettingsPage.VOICES -> SpeechVoicesPage(onBack = back)
                 SettingsPage.OFFLINE -> OfflineModelsPage(onBack = back)
             }
@@ -125,96 +126,16 @@ private fun SettingsMain(onPage: (SettingsPage) -> Unit) {
     }
     Footnote("下载后不用联网、不限量，翻译和同声传译都会快很多。")
 
-    Group("AI 增强（可选）") {
-        Box {
-            SettingRow("服务商", value = AISettings.provider.title, onClick = { providerMenu = true })
-            DropdownMenu(providerMenu, { providerMenu = false }) {
-                AIProvider.entries.forEach { p ->
-                    DropdownMenuItem(text = { Text(p.title) }, onClick = {
-                        providerMenu = false
-                        if (p != AISettings.provider) Analytics.track(Analytics.Event.SETTINGS_AI_PROVIDER, mapOf("provider" to p.key))
-                        AISettings.updateProvider(p)
-                        testResult = null
-                    })
-                }
-            }
-        }
-        SettingsDivider()
-        OutlinedTextField(
-            AISettings.apiKey, { AISettings.updateApiKey(it) }, label = { Text("API Key") }, singleLine = true,
-            visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth().padding(12.dp),
-        )
-        AISettings.provider.signupUrl?.let { url ->
+    Group(null) {
+        SettingRow("AI 增强", onClick = { onPage(SettingsPage.AI) }) {
             Text(
-                "去 ${AISettings.provider.title} 注册并获取 API Key", color = colors.accent, fontSize = 15.sp,
-                modifier = Modifier.fillMaxWidth().clickable { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }.padding(16.dp),
+                if (AISettings.isConfigured) AISettings.provider.title else "未配置",
+                color = if (AISettings.isConfigured) colors.ink3 else colors.ai, fontSize = 15.sp,
             )
-            SettingsDivider()
+            Icon(Icons.Rounded.ChevronRight, null, tint = colors.ink3)
         }
-        if (AISettings.provider == AIProvider.CUSTOM) {
-            OutlinedTextField(
-                AISettings.baseUrl, { AISettings.updateBaseUrl(it) }, label = { Text("接口地址，例如 https://api.openai.com/v1") },
-                singleLine = true, modifier = Modifier.fillMaxWidth().padding(12.dp),
-            )
-        }
-        if (AISettings.provider.suggestedModels.isNotEmpty()) {
-            Box {
-                SettingRow("模型", value = AISettings.model.ifEmpty { "未选择" }, onClick = { modelMenu = true })
-                DropdownMenu(modelMenu, { modelMenu = false }) {
-                    AISettings.provider.modelGroups.forEach { (group, models) ->
-                        Text(group, fontSize = 12.sp, color = colors.ink3, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
-                        models.forEach { m ->
-                            DropdownMenuItem(text = { Text(m) }, onClick = {
-                                modelMenu = false
-                                AISettings.updateModel(m)
-                            })
-                        }
-                    }
-                }
-            }
-            SettingsDivider()
-        }
-        OutlinedTextField(
-            AISettings.model, { AISettings.updateModel(it) }, label = { Text("或手动填写模型名称") }, singleLine = true,
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-        )
-        SettingRow("AI 优化：新会话默认开启") { Switch(AISettings.autoCalibrate, { AISettings.updateAutoCalibrate(it) }) }
-        SettingsDivider()
-        SettingRow("在译文下显示每次消耗的 token") { Switch(Prefs.showAIUsage, { Prefs.updateShowAIUsage(it) }) }
-        SettingsDivider()
-        SettingRow("测试连接", value = testResult, enabled = !testing && AISettings.isConfigured, onClick = {
-            testing = true
-            testResult = null
-            scope.launch {
-                testResult = try {
-                    AIClient.complete("This is a connectivity check from an app's settings screen. Reply with the single word OK.", "ping", AISettings.currentConfig)
-                    "连接正常"
-                } catch (e: Exception) {
-                    e.message
-                }
-                testing = false
-            }
-        }) { if (testing) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) }
-        SettingsDivider()
-        val summary = UsageStore.summarize(UsageStore.records(AISettings.provider))
-        SettingRow(
-            "${AISettings.provider.title} 累计用量",
-            value = "${summary.total} tokens",
-            subtitle = when {
-                summary.total == 0 -> "还没有用过"
-                summary.cost > 0 -> "约 ${Pricing.format(summary.cost)}（按标价估算）"
-                else -> "无价格数据"
-            },
-        )
-        SettingsDivider()
-        SettingRow("用量报表", onClick = { onPage(SettingsPage.REPORT) }) { Icon(Icons.Rounded.ChevronRight, null, tint = colors.ink3) }
     }
-    Footnote(
-        "Q-Translator 不提供 AI 额度，也不经过任何中间服务器：你自己在服务商那里注册，把 API Key 填在这里，费用由服务商向你收取。" +
-            "Key 只加密保存在本机。注意 ChatGPT 的会员订阅不包含 API 额度，API Key 要在 OpenAI 开发者平台单独申请。" +
-            "不填也能使用词典、翻译、朗读和图片翻译。AI 用于优化句子翻译和帮你写回复。单词和短语只查词典，不用 AI。" +
-            "token 用量默认不显示在译文下面，可以在用量报表里查看。"
-    )
+    Footnote("优化译文、写回复、场景练习、AI 音色要用到。可选，不填也能用词典、翻译、朗读和图片翻译。")
 
     Group("语音输入") {
         SettingRow("说完自动翻译") { Switch(Prefs.voiceAutoSend, { Prefs.updateVoiceAutoSend(it) }) }
@@ -311,6 +232,111 @@ fun SettingsPageHeader(title: String, onBack: () -> Unit) {
         Text(title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Lx.colors.ink)
     }
     Spacer(Modifier.height(12.dp))
+}
+
+/** AI 增强：服务商、API Key、模型、测试连接和用量。从设置进入，也可以在别处提示“需要配置 AI”时直接打开 */
+@Composable
+private fun AISettingsPage(onBack: () -> Unit, onPage: (SettingsPage) -> Unit) {
+    val colors = Lx.colors
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var providerMenu by remember { mutableStateOf(false) }
+    var modelMenu by remember { mutableStateOf(false) }
+    var testing by remember { mutableStateOf(false) }
+    var testResult by remember { mutableStateOf<String?>(null) }
+
+    SettingsPageHeader("AI 增强", onBack)
+    Group(null) {
+        Box {
+            SettingRow("服务商", value = AISettings.provider.title, onClick = { providerMenu = true })
+            DropdownMenu(providerMenu, { providerMenu = false }) {
+                AIProvider.entries.forEach { p ->
+                    DropdownMenuItem(text = { Text(p.title) }, onClick = {
+                        providerMenu = false
+                        if (p != AISettings.provider) Analytics.track(Analytics.Event.SETTINGS_AI_PROVIDER, mapOf("provider" to p.key))
+                        AISettings.updateProvider(p)
+                        testResult = null
+                    })
+                }
+            }
+        }
+        SettingsDivider()
+        OutlinedTextField(
+            AISettings.apiKey, { AISettings.updateApiKey(it) }, label = { Text("API Key") }, singleLine = true,
+            visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth().padding(12.dp),
+        )
+        AISettings.provider.signupUrl?.let { url ->
+            Text(
+                "去 ${AISettings.provider.title} 注册并获取 API Key", color = colors.accent, fontSize = 15.sp,
+                modifier = Modifier.fillMaxWidth().clickable { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }.padding(16.dp),
+            )
+            SettingsDivider()
+        }
+        if (AISettings.provider == AIProvider.CUSTOM) {
+            OutlinedTextField(
+                AISettings.baseUrl, { AISettings.updateBaseUrl(it) }, label = { Text("接口地址，例如 https://api.openai.com/v1") },
+                singleLine = true, modifier = Modifier.fillMaxWidth().padding(12.dp),
+            )
+        }
+        if (AISettings.provider.suggestedModels.isNotEmpty()) {
+            Box {
+                SettingRow("模型", value = AISettings.model.ifEmpty { "未选择" }, onClick = { modelMenu = true })
+                DropdownMenu(modelMenu, { modelMenu = false }) {
+                    AISettings.provider.modelGroups.forEach { (group, models) ->
+                        Text(group, fontSize = 12.sp, color = colors.ink3, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+                        models.forEach { m ->
+                            DropdownMenuItem(text = { Text(m) }, onClick = {
+                                modelMenu = false
+                                AISettings.updateModel(m)
+                            })
+                        }
+                    }
+                }
+            }
+            SettingsDivider()
+        }
+        OutlinedTextField(
+            AISettings.model, { AISettings.updateModel(it) }, label = { Text("或手动填写模型名称") }, singleLine = true,
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+        )
+        SettingRow("AI 优化：新会话默认开启") { Switch(AISettings.autoCalibrate, { AISettings.updateAutoCalibrate(it) }) }
+        SettingsDivider()
+        SettingRow("在译文下显示每次消耗的 token") { Switch(Prefs.showAIUsage, { Prefs.updateShowAIUsage(it) }) }
+        SettingsDivider()
+        SettingRow("测试连接", value = testResult, enabled = !testing && AISettings.isConfigured, onClick = {
+            testing = true
+            testResult = null
+            scope.launch {
+                testResult = try {
+                    AIClient.complete("This is a connectivity check from an app's settings screen. Reply with the single word OK.", "ping", AISettings.currentConfig)
+                    "连接正常"
+                } catch (e: Exception) {
+                    e.message
+                }
+                testing = false
+            }
+        }) { if (testing) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) }
+        SettingsDivider()
+        val summary = UsageStore.summarize(UsageStore.records(AISettings.provider))
+        SettingRow(
+            "${AISettings.provider.title} 累计用量",
+            value = "${summary.total} tokens",
+            subtitle = when {
+                summary.total == 0 -> "还没有用过"
+                summary.cost > 0 -> "约 ${Pricing.format(summary.cost)}（按标价估算）"
+                else -> "无价格数据"
+            },
+        )
+        SettingsDivider()
+        SettingRow("用量报表", onClick = { onPage(SettingsPage.REPORT) }) { Icon(Icons.Rounded.ChevronRight, null, tint = colors.ink3) }
+    }
+    Footnote(
+        "Q-Translator 不提供 AI 额度，也不经过任何中间服务器：你自己在服务商那里注册，把 API Key 填在这里，费用由服务商向你收取。" +
+            "Key 只加密保存在本机。注意 ChatGPT 的会员订阅不包含 API 额度，API Key 要在 OpenAI 开发者平台单独申请。" +
+            "不填也能使用词典、翻译、朗读和图片翻译。AI 用于优化句子翻译和帮你写回复。单词和短语只查词典，不用 AI。" +
+            "token 用量默认不显示在译文下面，可以在用量报表里查看。"
+    )
+
 }
 
 /** 用量报表：按天统计，可以看最近一周或本月，可以按服务商筛选 */

@@ -105,7 +105,7 @@ internal fun PracticeHomeView(top: @Composable () -> Unit, onOpen: (String) -> U
             }
         }
     }
-    if (showSettings) SettingsSheet(onDismiss = { showSettings = false })
+    if (showSettings) SettingsSheet(onDismiss = { showSettings = false }, startAtAI = true)
 }
 
 @Composable

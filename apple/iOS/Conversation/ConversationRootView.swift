@@ -77,6 +77,7 @@ struct PhoneRootView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in sheet = .settings }
+        .modifier(AINeededPrompt(open: { sheet = .aiSettings }))
         // 主屏快捷操作“新建翻译”
         .onChange(of: router.newSessionRequested) { _, requested in
             guard requested else { return }

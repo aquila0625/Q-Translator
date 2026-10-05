@@ -202,6 +202,7 @@ extension ComposerView {
             Button {
                 if !session.aiEnabled, !AISettings.shared.isConfigured {
                     onNeedAI()
+                    return
                 }
                 controller.setAI(!session.aiEnabled)
             } label: {

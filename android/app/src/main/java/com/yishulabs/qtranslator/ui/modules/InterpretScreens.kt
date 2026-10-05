@@ -319,7 +319,8 @@ fun InterpretRecordPage(id: String, onBack: () -> Unit, onContinue: () -> Unit) 
 
     fun summarize() {
         if (!AISettings.isConfigured) {
-            summaryError = "要先在设置里填写 AI 的 API Key。"
+            com.yishulabs.qtranslator.ui.AINeeded.request()
+            summaryError = "要先配置 AI 的 API Key。"
             return
         }
         summaryError = null

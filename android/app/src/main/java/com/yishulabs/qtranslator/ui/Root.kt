@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 /** 根界面弹出的面板 */
 sealed interface RootSheet {
     data object Settings : RootSheet
+    data object AISettings : RootSheet
     data object NewSession : RootSheet
     data object NewScene : RootSheet
     data class EditScene(val id: String) : RootSheet
@@ -96,10 +97,13 @@ fun QTranslatorRoot(controller: ConversationController) {
         }
         // 进行中的传译、面对面对话、练习：盖住整个界面
         com.yishulabs.qtranslator.ui.modules.ModuleActivityHost(controller)
+        // 没配置 AI 就点了要用 AI 的功能：提示，并可以直接去配置
+        AINeededDialog(onConfigure = { sheet = RootSheet.AISettings })
         sheet?.let { current ->
             val close = { sheet = null }
             when (current) {
                 RootSheet.Settings -> SettingsSheet(onDismiss = close)
+                RootSheet.AISettings -> SettingsSheet(onDismiss = close, startAtAI = true)
                 RootSheet.NewSession -> NewSessionSheet(controller, onDismiss = close, onNewScene = { sheet = RootSheet.NewScene })
                 RootSheet.NewScene -> SceneEditorSheet(controller, sceneId = null, onDismiss = close)
                 is RootSheet.EditScene -> SceneEditorSheet(controller, sceneId = current.id, onDismiss = close)

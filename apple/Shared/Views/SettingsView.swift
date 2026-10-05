@@ -1,11 +1,18 @@
 import SwiftUI
 
+enum SettingsRoute: Hashable { case ai }
+
 struct SettingsView: View {
+    /// startAtAI：直接打开 AI 增强页（别处提示“需要配置 AI”时用）
+    init(startAtAI: Bool = false) {
+        _path = State(initialValue: startAtAI ? [.ai] : [])
+    }
+
+    @State private var path: [SettingsRoute] = []
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var ai = AISettings.shared
     @AppStorage(SettingsKey.accent) private var accent = 2
     @AppStorage(SettingsKey.autoSpeak) private var autoSpeak = false
-    @AppStorage(SettingsKey.showAIUsage) private var showUsage = false
     @AppStorage(SettingsKey.voiceAutoSend) private var voiceAutoSend = false
     @AppStorage(SettingsKey.appearance) private var appearance = 0
     @AppStorage(SettingsKey.interpreterSpeak) private var interpreterSpeak = false
@@ -13,12 +20,9 @@ struct SettingsView: View {
     @AppStorage("interpreter.sourceIsChinese") private var interpreterFromChinese = false
     @AppStorage("voice.language") private var voiceLanguage = "en-US"
 
-    @ObservedObject private var usage = UsageStore.shared
-    @State private var testing = false
-    @State private var testResult: String?
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Form {
                 Section("外观") {
                     Picker("主题", selection: $appearance) {
@@ -39,62 +43,16 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Picker("服务商", selection: $ai.provider) {
-                        ForEach(AIProvider.allCases) { Text($0.title).tag($0) }
-                    }
-                    .onChange(of: ai.provider) { _, provider in Analytics.track(.settingsAIProvider, ["provider": provider.rawValue]) }
-                    SecureField("API Key", text: $ai.apiKey)
-                        .textContentType(.password)
-                        .autocorrectionDisabled()
-                    if let url = ai.provider.signupURL {
-                        Link("去 \(ai.provider.title) 注册并获取 API Key", destination: url)
-                    }
-                    if ai.provider == .custom {
-                        TextField("接口地址，例如 https://api.openai.com/v1", text: $ai.baseURL)
-                            .autocorrectionDisabled()
-                    }
-                    if !ai.provider.suggestedModels.isEmpty {
-                        Picker("模型", selection: $ai.model) {
-                            ForEach(ai.provider.modelGroups, id: \.title) { group in
-                                Section(group.title) {
-                                    ForEach(group.models, id: \.self) { Text($0).tag($0) }
-                                }
-                            }
-                            if !ai.provider.suggestedModels.contains(ai.model) {
-                                Text(ai.model.isEmpty ? "未选择" : ai.model).tag(ai.model)
-                            }
-                        }
-                    }
-                    TextField("或手动填写模型名称", text: $ai.model)
-                        .autocorrectionDisabled()
-                    Toggle("AI 优化：翻译句子后自动优化译文", isOn: $ai.autoCalibrate)
-                    Toggle("在译文下显示每次消耗的 token", isOn: $showUsage)
-                    Button {
-                        test()
-                    } label: {
+                    NavigationLink(value: SettingsRoute.ai) {
                         HStack {
-                            Text("测试连接")
-                            if testing { ProgressView().controlSize(.small) }
+                            Label("AI 增强", systemImage: "sparkles")
                             Spacer()
-                            if let testResult { Text(testResult).foregroundStyle(.secondary) }
+                            Text(ai.isConfigured ? ai.provider.title : "未配置")
+                                .foregroundStyle(ai.isConfigured ? Color.secondary : Color.lxAI)
                         }
                     }
-                    .disabled(testing || !ai.isConfigured)
-                    let summary = UsageStore.summarize(usage.records(for: ai.provider))
-                    LabeledContent("\(ai.provider.title) 累计用量") {
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("\(summary.total.formatted()) tokens")
-                            Text(summary.total == 0 ? "还没有用过" :
-                                 (summary.cost > 0 ? "约 " + Pricing.format(summary.cost) + "（按标价估算）" : "无价格数据"))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    NavigationLink("用量报表") { UsageReportView() }
-                } header: {
-                    Text("AI 增强（可选）")
                 } footer: {
-                    Text("Q-Translator 不提供 AI 额度，也不经过任何中间服务器：你自己在服务商那里注册，把 API Key 填在这里，费用由服务商向你收取。Key 只保存在本机钥匙串。注意 ChatGPT 的会员订阅不包含 API 额度，API Key 要在 OpenAI 开发者平台单独申请。不填也能使用词典、翻译、朗读和图片翻译。AI 用于优化句子翻译和帮你写回复；上面的开关关闭时不会自动优化，只有你点“AI 优化”才会运行。单词和短语只查词典，不用 AI。token 用量默认不显示在译文下面，可以在用量报表里查看。")
+                    Text("优化译文、写回复、场景练习、AI 音色要用到。可选，不填也能用词典、翻译、朗读和图片翻译。")
                 }
 
                 Section {
@@ -149,6 +107,7 @@ struct SettingsView: View {
                 }
             }
             .formStyle(.grouped)
+            .navigationDestination(for: SettingsRoute.self) { _ in AISettingsView() }
             .navigationTitle("设置")
             .analyticsPage("设置")
             .inlineNavigationTitle()
@@ -166,6 +125,83 @@ struct SettingsView: View {
         .presentationDragIndicator(.visible)
         .tint(.lxAccent)
         .appAppearance()
+    }
+}
+
+/// AI 增强：服务商、API Key、模型、测试连接和用量。从设置进入，也可以在别处提示“需要配置 AI”时直接打开
+struct AISettingsView: View {
+    @ObservedObject private var ai = AISettings.shared
+    @ObservedObject private var usage = UsageStore.shared
+    @AppStorage(SettingsKey.showAIUsage) private var showUsage = false
+    @State private var testing = false
+    @State private var testResult: String?
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("服务商", selection: $ai.provider) {
+                    ForEach(AIProvider.allCases) { Text($0.title).tag($0) }
+                }
+                .onChange(of: ai.provider) { _, provider in Analytics.track(.settingsAIProvider, ["provider": provider.rawValue]) }
+                SecureField("API Key", text: $ai.apiKey)
+                    .textContentType(.password)
+                    .autocorrectionDisabled()
+                if let url = ai.provider.signupURL {
+                    Link("去 \(ai.provider.title) 注册并获取 API Key", destination: url)
+                }
+                if ai.provider == .custom {
+                    TextField("接口地址，例如 https://api.openai.com/v1", text: $ai.baseURL)
+                        .autocorrectionDisabled()
+                }
+                if !ai.provider.suggestedModels.isEmpty {
+                    Picker("模型", selection: $ai.model) {
+                        ForEach(ai.provider.modelGroups, id: \.title) { group in
+                            Section(group.title) {
+                                ForEach(group.models, id: \.self) { Text($0).tag($0) }
+                            }
+                        }
+                        if !ai.provider.suggestedModels.contains(ai.model) {
+                            Text(ai.model.isEmpty ? "未选择" : ai.model).tag(ai.model)
+                        }
+                    }
+                }
+                TextField("或手动填写模型名称", text: $ai.model)
+                    .autocorrectionDisabled()
+                Toggle("AI 优化：翻译句子后自动优化译文", isOn: $ai.autoCalibrate)
+                Toggle("在译文下显示每次消耗的 token", isOn: $showUsage)
+                Button {
+                    test()
+                } label: {
+                    HStack {
+                        Text("测试连接")
+                        if testing { ProgressView().controlSize(.small) }
+                        Spacer()
+                        if let testResult { Text(testResult).foregroundStyle(.secondary) }
+                    }
+                }
+                .disabled(testing || !ai.isConfigured)
+                let summary = UsageStore.summarize(usage.records(for: ai.provider))
+                LabeledContent("\(ai.provider.title) 累计用量") {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("\(summary.total.formatted()) tokens")
+                        Text(summary.total == 0 ? "还没有用过" :
+                             (summary.cost > 0 ? "约 " + Pricing.format(summary.cost) + "（按标价估算）" : "无价格数据"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                NavigationLink("用量报表") { UsageReportView() }
+            } header: {
+                Text("AI 增强（可选）")
+            } footer: {
+                Text("Q-Translator 不提供 AI 额度，也不经过任何中间服务器：你自己在服务商那里注册，把 API Key 填在这里，费用由服务商向你收取。Key 只保存在本机钥匙串。注意 ChatGPT 的会员订阅不包含 API 额度，API Key 要在 OpenAI 开发者平台单独申请。不填也能使用词典、翻译、朗读和图片翻译。AI 用于优化句子翻译和帮你写回复；上面的开关关闭时不会自动优化，只有你点“AI 优化”才会运行。单词和短语只查词典，不用 AI。token 用量默认不显示在译文下面，可以在用量报表里查看。")
+            }
+
+        }
+        .formStyle(.grouped)
+        .navigationTitle("AI 增强")
+        .inlineNavigationTitle()
+        .analyticsPage("AI 增强")
     }
 
     private func test() {

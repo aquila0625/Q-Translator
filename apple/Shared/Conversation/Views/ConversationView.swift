@@ -147,7 +147,7 @@ struct ConversationView: View {
                                      onOpenWord: { wordToShow = $0 },
                                      onReply: { replyTo = $0 },
                                      onEditImage: { editingImage = ImageRef(turnID: turn.id, imageID: $0) },
-                                     onNeedAI: onSettings,
+                                     onNeedAI: { NotificationCenter.default.post(name: .needAI, object: nil) },
                                 expanded: expandedTurns.contains(turn.id),
                                 onToggleExpand: {
                                     withAnimation(.snappy) {
@@ -253,7 +253,7 @@ struct ConversationView: View {
                 InterpretMiniBar()
                 if let session {
                     ComposerView(controller: controller, session: session, focused: $composerFocused,
-                                 screenHeight: screenHeight, onNeedAI: onSettings)
+                                 screenHeight: screenHeight, onNeedAI: { NotificationCenter.default.post(name: .needAI, object: nil) })
                 }
             }
         }

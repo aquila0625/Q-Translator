@@ -561,7 +561,8 @@ struct InterpretRecordPage: View {
 
     private func summarize(_ record: InterpretRecord) {
         guard ai.isConfigured else {
-            summaryError = "要先在设置里填写 AI 的 API Key。"
+            NotificationCenter.default.post(name: .needAI, object: nil)
+            summaryError = "要先配置 AI 的 API Key。"
             return
         }
         summaryError = nil
@@ -692,7 +693,7 @@ struct PracticeHome<Top: View>: View {
     var body: some View {
         ModuleScroll(top: top) {
             if !ai.isConfigured {
-                Button { NotificationCenter.default.post(name: .openSettings, object: nil) } label: {
+                Button { NotificationCenter.default.post(name: .openAISettings, object: nil) } label: {
                     Label("场景练习要用 AI：先去设置里填写 API Key", systemImage: "sparkles")
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(Color.lxAI)

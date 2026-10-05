@@ -193,7 +193,10 @@ private fun Editor(controller: ConversationController, session: ChatSession, max
                     modifier = Modifier.semantics { contentDescription = "AI 优化：" + if (session.aiEnabled) "开" else "关" },
                     height = 34.dp,
                     onClick = {
-                        if (!session.aiEnabled && !AISettings.isConfigured) onNeedAI()
+                        if (!session.aiEnabled && !AISettings.isConfigured) {
+                            onNeedAI()
+                            return@Pill
+                        }
                         controller.setAI(!session.aiEnabled)
                     },
                 )

@@ -317,7 +317,7 @@ fun ConversationScreen(
                                             onOpenWord = { word = it },
                                             onReply = { replyTo = it },
                                             onOpenImage = { imageRef = turn.id to it },
-                                            onNeedAI = { onSheet(RootSheet.Settings) },
+                                            onNeedAI = { AINeeded.request() },
                                             showsActions = turn.id == turns.lastOrNull()?.id || picked,
                                             onSelect = { selectedTurn = if (picked) null else turn.id },
                                         )
@@ -349,7 +349,7 @@ fun ConversationScreen(
                     ModuleRouter.launch = ModuleRouter.Launch.Interpret(null)
                 })
                 if (session != null) {
-                    Composer(controller, session, maxHeightDp = screenHeight, onNeedAI = { onSheet(RootSheet.Settings) })
+                    Composer(controller, session, maxHeightDp = screenHeight, onNeedAI = { AINeeded.request() })
                 }
             }
         }
