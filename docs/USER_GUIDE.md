@@ -223,7 +223,7 @@ Find the model name in the provider's documentation (for example `qwen-plus`); m
 <img src="images/settings-provider.png" width="240" alt="Choosing a provider">
 </p>
 
-1. Drawer › 设置 (Settings) at the bottom left › AI 增强（可选）.
+1. Drawer › 设置 (Settings) at the bottom left › tap AI 增强 (AI enhancement). If you tap a feature that needs AI before setting a key, a dialog offers 去配置 (set up), which opens this page directly.
 2. **服务商 (Provider)**: choose the one you signed up with.
 3. **API Key**: paste your key. The link below it opens the provider's sign-up page.
 4. **模型 (Model)**: pick one from the list or type a name. The default is fine; smaller models near the top of the list cost less.
