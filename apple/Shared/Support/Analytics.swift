@@ -43,6 +43,9 @@ enum Analytics {
         case settingsAIProvider = "settings_ai_provider"
         case settingsVoice = "settings_voice"
         case settingsSpeed = "settings_speed"
+        case updatePrompt = "update_prompt"
+        case updateAccept = "update_accept"
+        case updateSkip = "update_skip"
 
         var title: String {
             switch self {
@@ -74,6 +77,9 @@ enum Analytics {
             case .settingsAIProvider: "设置 AI 服务商"
             case .settingsVoice: "选择音色"
             case .settingsSpeed: "调整朗读速度"
+            case .updatePrompt: "弹出更新提示"
+            case .updateAccept: "点击更新"
+            case .updateSkip: "跳过此版本"
             }
         }
     }

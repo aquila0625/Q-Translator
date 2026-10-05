@@ -103,6 +103,7 @@ struct SettingsView: View {
                 Section("关于") {
                     NavigationLink("隐私协议") { PrivacyPolicyView() }
                     LabeledContent("版本", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")
+                    CheckUpdateRow()
                     Link("源代码（MIT 许可）", destination: URL(string: "https://github.com/aquila0625/Q-Translator")!)
                 }
             }
@@ -110,6 +111,7 @@ struct SettingsView: View {
             .navigationDestination(for: SettingsRoute.self) { _ in AISettingsView() }
             .navigationTitle("设置")
             .analyticsPage("设置")
+            .manualUpdateAlerts()
             .inlineNavigationTitle()
             #if os(macOS)
             .toolbar {

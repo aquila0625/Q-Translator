@@ -27,3 +27,6 @@ practice_hands_free,切换语音聊天,多参数类型事件,on 打开 yes/关�
 settings_ai_provider,设置 AI 服务商,多参数类型事件,provider 服务商
 settings_voice,选择音色,多参数类型事件,type ai/system；voice 音色名
 settings_speed,调整朗读速度,多参数类型事件,speed 速度
+update_prompt,弹出更新提示,多参数类型事件,version 新版本号
+update_accept,点击更新,多参数类型事件,version 新版本号
+update_skip,跳过此版本,多参数类型事件,version 新版本号

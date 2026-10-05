@@ -189,6 +189,24 @@ private fun SettingsMain(onPage: (SettingsPage) -> Unit) {
     Group("关于") {
         SettingRow("版本", value = BuildConfig.VERSION_NAME)
         SettingsDivider()
+        // Google Play 版由商店更新，不显示这一行
+        if (com.yishulabs.qtranslator.update.UpdateChecker.enabled) {
+            val checking = com.yishulabs.qtranslator.update.UpdateChecker.checking
+            SettingRow("检查更新", onClick = {
+                scope.launch {
+                    val message = when (com.yishulabs.qtranslator.update.UpdateChecker.checkManually()) {
+                        com.yishulabs.qtranslator.update.UpdateChecker.CheckResult.UP_TO_DATE -> "已经是最新版本"
+                        com.yishulabs.qtranslator.update.UpdateChecker.CheckResult.FAILED -> "检查失败，请稍后再试"
+                        else -> null
+                    }
+                    if (message != null) android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }, enabled = !checking) {
+                if (checking) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = colors.accent)
+                else Icon(Icons.Rounded.ChevronRight, null, tint = colors.ink3)
+            }
+            SettingsDivider()
+        }
         SettingRow("隐私协议", onClick = { showPrivacy = true }) { Icon(Icons.Rounded.ChevronRight, null, tint = colors.ink3) }
         SettingsDivider()
         SettingRow("源代码（MIT 许可）", onClick = {

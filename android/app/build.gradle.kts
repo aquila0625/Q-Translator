@@ -29,6 +29,14 @@ android {
         fun key(name: String) = "\"" + (local.getProperty(name) ?: "").trim() + "\""
         buildConfigField("String", "UMENG_APPKEY", key("UMENG_APPKEY_ANDROID"))
         buildConfigField("String", "UMENG_APPKEY_TABLET", key("UMENG_APPKEY_ANDROID_TABLET"))
+
+        // 应用内检查更新的服务器地址，默认是官网；本地测试时可以在 local.properties 里写
+        //   QT_UPDATE_BASE_URL=http://192.168.x.x:8000
+        // 临时指到本机。只有指到 http:// 地址时才允许明文网络请求，正式包（https）不开放。
+        val updateBase = (local.getProperty("QT_UPDATE_BASE_URL") ?: "").trim().trimEnd('/')
+            .ifEmpty { "https://translate.yishulabs.com" }
+        buildConfigField("String", "UPDATE_BASE_URL", "\"$updateBase\"")
+        manifestPlaceholders["usesCleartextTraffic"] = if (updateBase.startsWith("http://")) "true" else "false"
     }
 
     // 发布签名：官网的 APK 和 Google Play 必须用同一把密钥，这样才是同一个应用（用户可以互相覆盖升级）。

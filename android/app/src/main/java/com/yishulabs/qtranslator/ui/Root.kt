@@ -42,6 +42,8 @@ fun QTranslatorRoot(controller: ConversationController) {
         var sheet by remember { mutableStateOf<RootSheet?>(null) }
         // 第一次打开时问要不要发送匿名统计；统计根界面在看翻译还是哪个模块的首页
         AnalyticsConsentPrompt(ModuleRouter.module?.let { it.fullTitle + "首页" } ?: "翻译")
+        // 启动后在后台检查一次更新（有节流，Google Play 版不检查）
+        LaunchedEffect(Unit) { com.yishulabs.qtranslator.update.UpdateChecker.checkAutomatically() }
         // 桌面快捷方式“新建翻译”
         LaunchedEffect(ModuleRouter.newSessionRequested) {
             if (!ModuleRouter.newSessionRequested) return@LaunchedEffect
@@ -99,6 +101,8 @@ fun QTranslatorRoot(controller: ConversationController) {
         com.yishulabs.qtranslator.ui.modules.ModuleActivityHost(controller)
         // 没配置 AI 就点了要用 AI 的功能：提示，并可以直接去配置
         AINeededDialog(onConfigure = { sheet = RootSheet.AISettings })
+        // 发现新版本：提示、下载、安装
+        com.yishulabs.qtranslator.update.UpdateDialog()
         sheet?.let { current ->
             val close = { sheet = null }
             when (current) {

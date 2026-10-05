@@ -117,6 +117,8 @@ struct WideRootView: View {
         .appAppearance()
         #if os(macOS)
         .analyticsStart()
+        // iPad 的更新提示挂在外层 ConversationRootView 上，这里只给 Mac 用
+        .updatePrompt()
         #endif
         .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in sheet = .settings }
         .modifier(AINeededPrompt(open: { sheet = .aiSettings }))

@@ -60,6 +60,9 @@ object Analytics {
         SETTINGS_AI_PROVIDER("settings_ai_provider", "设置 AI 服务商"),
         SETTINGS_VOICE("settings_voice", "选择音色"),
         SETTINGS_SPEED("settings_speed", "调整朗读速度"),
+        UPDATE_PROMPT("update_prompt", "弹出更新提示"),
+        UPDATE_ACCEPT("update_accept", "点击立即更新"),
+        UPDATE_SKIP("update_skip", "跳过此版本"),
     }
 
     private const val OFF_KEY = "privacy.statsOff.v1"

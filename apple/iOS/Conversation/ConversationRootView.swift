@@ -17,6 +17,7 @@ struct ConversationRootView: View {
         }
         .appAppearance()
         .analyticsStart()
+        .updatePrompt()
     }
 }
 

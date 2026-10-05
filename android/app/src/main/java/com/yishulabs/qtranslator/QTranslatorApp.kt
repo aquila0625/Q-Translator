@@ -28,5 +28,6 @@ class QTranslatorApp : Application() {
         com.yishulabs.qtranslator.core.AudioReplay.init(this)
         ModuleStore.init(this)
         Analytics.init(this)
+        com.yishulabs.qtranslator.update.UpdateChecker.init(this)
     }
 }
