@@ -20,7 +20,7 @@ Conversations, photos, recordings and records are stored only on your device and
 
 ## Your choice
 
-If you agree, Q-Translator starts collecting anonymous usage data. If you do not, every feature still works; nothing is collected.
+Q-Translator collects anonymous usage data by default. You can turn it off at any time in Settings › 关于 (About) › 隐私协议; every feature keeps working and nothing is collected afterwards.
 
 ## Builds from source
 

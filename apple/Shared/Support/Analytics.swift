@@ -78,8 +78,7 @@ enum Analytics {
         }
     }
 
-    private static let acceptedKey = "privacy.accepted.v1"
-    private static let answeredKey = "privacy.answered.v1"
+    private static let offKey = "privacy.statsOff.v1"
     private static var started = false
 
     /// 这台设备用的 AppKey：iPad 和 iPhone 分开统计；没填就是 nil
@@ -102,15 +101,11 @@ enum Analytics {
         #endif
     }
 
-    /// 用户是否回答过隐私协议（同意或不同意都算）
-    static var answered: Bool { UserDefaults.standard.bool(forKey: answeredKey) }
-
-    /// 用户是否同意了隐私协议；不同意也能正常使用快译，只是不统计
+    /// 统计默认开启；用户可以在“设置 → 关于 → 隐私协议”里自己关闭
     static var accepted: Bool {
-        get { UserDefaults.standard.bool(forKey: acceptedKey) }
+        get { !UserDefaults.standard.bool(forKey: offKey) }
         set {
-            UserDefaults.standard.set(newValue, forKey: acceptedKey)
-            UserDefaults.standard.set(true, forKey: answeredKey)
+            UserDefaults.standard.set(!newValue, forKey: offKey)
             if newValue { start() } else { stop() }
         }
     }
@@ -129,7 +124,11 @@ enum Analytics {
 
     private static func start() {
         #if canImport(UMCommon)
-        guard !started, let appKey else { return }
+        guard let appKey else { return }
+        if started {
+            UMConfigure.setAnalyticsEnabled(true)
+            return
+        }
         started = true
         #if DEBUG
         UMConfigure.setLogEnabled(true)
@@ -185,9 +184,9 @@ extension View {
             .onDisappear { Analytics.endPage(name) }
     }
 
-    /// 第一次打开时显示隐私协议（没有统计功能的版本不弹）
-    func privacyGate() -> some View {
-        modifier(PrivacyGate())
+    /// 启动时开始统计（用户没关闭的话）
+    func analyticsStart() -> some View {
+        task { Analytics.startIfAllowed() }
     }
 }
 
@@ -200,7 +199,7 @@ enum PrivacyPolicy {
         ("我们不收集什么", "你输入或说出的内容、翻译的文字、拍摄或选择的图片、录音、会话和记录的内容、生词本、你的 API Key，都不会上传给我们或统计服务商。"),
         ("数据交给谁处理", "使用数据由友盟+（Umeng）提供的统计服务处理，详见友盟+的隐私政策。快译没有自己的服务器。"),
         ("你的内容在哪里", "会话、图片、录音和各种记录只保存在你的设备上，删除 App 就会一起删除。翻译和 AI 功能会按你的选择，把需要翻译的文字发给翻译服务或你自己填写的 AI 服务商。"),
-        ("你的选择", "同意后快译会开始统计匿名使用数据；不同意也可以正常使用快译的全部功能，只是不会统计。"),
+        ("你的选择", "快译默认统计匿名使用数据。你可以随时在下面关闭，关闭后快译的全部功能照常使用，只是不再统计。"),
     ]
 }
 
@@ -217,12 +216,9 @@ struct PrivacyPolicyView: View {
                         Text(section.1).font(.subheadline).foregroundStyle(.secondary)
                     }
                 }
-                if Analytics.isAvailable, !accepted {
-                    Button("同意并开启统计") {
-                        Analytics.accepted = true
-                        accepted = true
-                    }
-                    .buttonStyle(.borderedProminent)
+                if Analytics.isAvailable {
+                    Toggle("发送匿名使用统计", isOn: $accepted)
+                        .onChange(of: accepted) { _, on in Analytics.accepted = on }
                 }
             }
             .padding(20)
@@ -231,58 +227,5 @@ struct PrivacyPolicyView: View {
         }
         .navigationTitle(PrivacyPolicy.title)
         .inlineNavigationTitle()
-    }
-}
-
-private struct PrivacyGate: ViewModifier {
-    @State private var asking = false
-
-    func body(content: Content) -> some View {
-        content
-            .task {
-                Analytics.startIfAllowed()
-                if Analytics.isAvailable, !Analytics.answered { asking = true }
-            }
-            #if os(iOS)
-            .fullScreenCover(isPresented: $asking) { gate }
-            #else
-            .sheet(isPresented: $asking) { gate }
-            #endif
-    }
-
-    private var gate: some View {
-        VStack(spacing: 0) {
-            Text(PrivacyPolicy.title).font(.title2.weight(.bold)).padding(.top, 28).padding(.bottom, 8)
-            PrivacyPolicyView().navigationTitle("")
-            VStack(spacing: 10) {
-                Button {
-                    Analytics.accepted = true
-                    asking = false
-                } label: {
-                    Text("同意")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(Color.lxOnAccent)
-                        .frame(maxWidth: .infinity, minHeight: 50)
-                        .background(Color.lxAccent, in: .capsule)
-                }
-                .buttonStyle(.plain)
-                Button("不同意") {
-                    Analytics.accepted = false
-                    asking = false
-                }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .frame(minHeight: 44)
-            }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 20)
-            .frame(maxWidth: 560)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.lxBackground.ignoresSafeArea())
-        .interactiveDismissDisabled()
-        #if os(macOS)
-        .frame(minWidth: 480, minHeight: 520)
-        #endif
     }
 }

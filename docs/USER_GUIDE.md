@@ -21,7 +21,7 @@ This guide uses the iPhone app; the Mac and iPad apps work the same way. The app
 
 The app opens on a translation conversation. Type in the box at the bottom; there is no language to pick: English is translated into Chinese and Chinese into English.
 
-On first launch the app shows its [privacy policy](PRIVACY.md); read and accept it to start using the app. You can read it again later in Settings › 关于 (About) › 隐私协议.
+The privacy policy is in Settings › 关于 (About) › 隐私协议; see also the [privacy policy](PRIVACY.md).
 
 Everything except a few AI features works without an API key: dictionary, sentence and photo translation, voice input, reading aloud, live interpretation and face to face. Scene practice, AI polishing, reply drafting, AI voices and interpretation summaries need a key; see [section 5](#5-ai-features-and-api-keys).
 
