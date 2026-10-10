@@ -91,6 +91,19 @@ final class AISettings: ObservableObject {
         !apiKey.trimmed.isEmpty && !model.trimmed.isEmpty && (provider == .claude || !baseURL.trimmed.isEmpty)
     }
 
+    /// 语音转写（AI 精校同声传译）用 OpenAI 的 Key，和服务商“ChatGPT”用的是同一个
+    var openAIKey: String {
+        get { provider == .openai ? apiKey : Keychain.get(account: AIProvider.openai.rawValue) ?? "" }
+        set {
+            if provider == .openai {
+                apiKey = newValue
+            } else {
+                Keychain.set(newValue.trimmed, account: AIProvider.openai.rawValue)
+                objectWillChange.send()
+            }
+        }
+    }
+
     /// 切换服务商后，读出这家服务商各自保存的 key、模型和地址
     private func load() {
         apiKey = Keychain.get(account: provider.rawValue) ?? ""

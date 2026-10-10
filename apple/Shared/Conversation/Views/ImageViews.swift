@@ -25,14 +25,16 @@ struct TranslatedImageView: View {
     private func overlay(_ block: ImageBlock, in size: CGSize) -> some View {
         let turns = (block.turns ?? 0) % 4
         // 屏幕上这一块占的大小；转过 90° / 270° 时，文字是横着排的，排版用的宽高要对调
-        let boxWidth: CGFloat = max(CGFloat(block.width) * size.width, 12)
-        let boxHeight: CGFloat = max(CGFloat(block.height) * size.height, 10)
+        let boxWidth: CGFloat = max(CGFloat(block.width) * size.width, 1)
+        let boxHeight: CGFloat = max(CGFloat(block.height) * size.height, 1)
         let sideways = turns % 2 == 1
         let width = sideways ? boxHeight : boxWidth
         let height = sideways ? boxWidth : boxHeight
-        // 按原文的行高估一个字号，放不下时再缩小
+        // 字号跟图片里的原文一样大（中文字看起来比英文大，取行高的 0.7），再按这段译文要几行缩到刚好放得下。
+        // 不设最小字号：原文多小译文就多小，看不清可以放大
         let lineHeight: CGFloat = height / CGFloat(max(block.lines, 1))
-        let fontSize: CGFloat = max(7, min(40, lineHeight * 0.78))
+        let fontSize = OverlayLabel.fittedSize(block.translation, width: width, height: height,
+                                               preferred: max(1, lineHeight * 0.7))
         let center = CGPoint(x: CGFloat(block.x + block.width / 2) * size.width,
                              y: CGFloat(block.y + block.height / 2) * size.height)
         return OverlayLabel(text: block.translation, fontSize: fontSize, width: width, height: height,
@@ -42,7 +44,8 @@ struct TranslatedImageView: View {
     }
 }
 
-/// 盖在原文上的一块译文：用原文周围的底色完全盖住原文，深底配白字、浅底配黑字；字号放不下时自动缩小
+/// 盖在原文上的一块译文：用原文周围的底色完全盖住原文，深底配白字、浅底配黑字。
+/// 大小严格等于原文的范围，不会压到旁边的行；字号放不下时缩小
 private struct OverlayLabel: View {
     let text: String
     let fontSize: CGFloat
@@ -63,13 +66,35 @@ private struct OverlayLabel: View {
     var body: some View {
         Text(text)
             .font(.system(size: fontSize, weight: .medium))
+            .lineSpacing(0)
             .foregroundStyle(isDark ? Color.white : Color.black)
-            .minimumScaleFactor(0.25)
+            .minimumScaleFactor(0.7)
             .multilineTextAlignment(.leading)
-            .frame(width: width + 8, height: height + 8, alignment: .leading)
-            .padding(.horizontal, 3)
-            .background(fill, in: .rect(cornerRadius: 4))
+            .frame(width: width, height: height, alignment: .topLeading)
+            .clipped()
+            // 底色比原文范围多出一点点，盖住原文的边缘
+            .background { RoundedRectangle(cornerRadius: 3).fill(fill).padding(-2) }
             .accessibilityLabel(text)
+    }
+
+    /// 估算这段文字放进 width × height 要几行，找一个刚好放得下的字号（不超过 preferred）
+    static func fittedSize(_ text: String, width: CGFloat, height: CGFloat, preferred: CGFloat) -> CGFloat {
+        // 每个字大约占几个字号的宽度：汉字 1，英文字母和数字 0.55，空格 0.3
+        let ems = text.reduce(0.0) { sum, ch in
+            if ch.isWhitespace { return sum + 0.3 }
+            if ch.unicodeScalars.contains(where: { (0x2E80...0x9FFF).contains($0.value) || (0xFF00...0xFFEF).contains($0.value) }) { return sum + 1 }
+            return sum + 0.58
+        }
+        guard ems > 0, width > 0, height > 0 else { return preferred }
+        var size = preferred
+        let step = max(preferred / 40, 0.1)
+        while size > step {
+            // 换行时行尾会空一点，按 90% 的宽度算
+            let lines = (ems * size / (width * 0.9)).rounded(.up)
+            if lines * size * 1.22 <= height { return size }
+            size -= step
+        }
+        return step
     }
 }
 

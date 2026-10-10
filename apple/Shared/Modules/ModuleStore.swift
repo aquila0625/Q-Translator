@@ -32,11 +32,30 @@ struct InterpretRecord: Codable, Identifiable, Equatable {
     var createdAt = Date()
     var updatedAt = Date()
     var sourceIsChinese: Bool
+    /// 用的是中英自动识别
+    var autoLanguage: Bool?
     var lines: [TranscriptLine] = []
     /// 收音时长（秒），继续录时累加
     var duration: Double = 0
     /// AI 总结的要点（有 Key 时可以生成）
     var summary: String?
+    /// 录音，继续录时一段一段接在后面；文件在 ConversationStore.mediaURL 里
+    var audio: [AudioPart]?
+    /// AI 精校：整段录音交给 OpenAI 重新识别、整篇重新翻译的结果
+    var refined: [TranscriptLine]?
+    var refinedAt: Date?
+    /// 正在看精校版（否则看实时字幕）
+    var showsRefined: Bool?
+
+    struct AudioPart: Codable, Equatable {
+        var name: String
+        var duration: Double
+    }
+
+    var audioDuration: Double { (audio ?? []).reduce(0) { $0 + $1.duration } }
+
+    /// 正在显示的那一版字幕
+    var shownLines: [TranscriptLine] { showsRefined == true ? refined ?? lines : lines }
 
     static func defaultTitle(_ date: Date) -> String {
         date.formatted(.dateTime.month(.defaultDigits).day().hour().minute()) + " 传译"
@@ -100,22 +119,36 @@ final class ModuleStore: ObservableObject {
 
     func interpretation(_ id: UUID) -> InterpretRecord? { interpretations.first { $0.id == id } }
 
-    /// 结束一段传译：新的一条放在最前面；继续录的接在原来那条后面，时长累加。没说话就不存。返回记录的 ID
+    /// 结束一段传译：新的一条放在最前面；继续录的接在原来那条后面，时长累加，句子的时间接着前面的录音往后算。
+    /// 没说话就不存（录音也删掉）。返回记录的 ID
     @discardableResult
-    func saveInterpretation(_ lines: [TranscriptLine], duration: Double, sourceIsChinese: Bool, into id: UUID?) -> UUID? {
+    func saveInterpretation(_ lines: [TranscriptLine], duration: Double, sourceIsChinese: Bool, autoLanguage: Bool,
+                            audio: InterpretRecord.AudioPart?, into id: UUID?) -> UUID? {
         if let id, let i = interpretations.firstIndex(where: { $0.id == id }) {
             var record = interpretations.remove(at: i)
-            record.lines += lines
+            let offset = record.audioDuration
+            record.lines += lines.map { line in
+                var line = line
+                line.start = line.start.map { $0 + offset }
+                line.end = line.end.map { $0 + offset }
+                return line
+            }
             record.duration += duration
+            if autoLanguage { record.autoLanguage = true }
+            if let audio { record.audio = (record.audio ?? []) + [audio] }
             if !lines.isEmpty { record.updatedAt = Date() }
             interpretations.insert(record, at: 0)
             save()
             return id
         }
-        guard !lines.isEmpty else { return nil }
+        guard !lines.isEmpty else {
+            if let audio { ConversationStore.deleteMediaFile(audio.name) }
+            return nil
+        }
         let now = Date()
         let record = InterpretRecord(title: InterpretRecord.defaultTitle(now), createdAt: now, updatedAt: now,
-                                     sourceIsChinese: sourceIsChinese, lines: lines, duration: duration)
+                                     sourceIsChinese: sourceIsChinese, autoLanguage: autoLanguage ? true : nil, lines: lines, duration: duration,
+                                     audio: audio.map { [$0] })
         interpretations.insert(record, at: 0)
         save()
         return record.id
@@ -127,7 +160,19 @@ final class ModuleStore: ObservableObject {
         save()
     }
 
+    /// 改正在显示的那一版里的一句
+    func updateLine(_ id: UUID, _ lineID: UUID, _ change: (inout TranscriptLine) -> Void) {
+        updateInterpretation(id) { record in
+            if record.showsRefined == true, let i = record.refined?.firstIndex(where: { $0.id == lineID }) {
+                change(&record.refined![i])
+            } else if let i = record.lines.firstIndex(where: { $0.id == lineID }) {
+                change(&record.lines[i])
+            }
+        }
+    }
+
     func deleteInterpretation(_ id: UUID) {
+        interpretation(id)?.audio?.forEach { ConversationStore.deleteMediaFile($0.name) }
         interpretations.removeAll { $0.id == id }
         save()
     }

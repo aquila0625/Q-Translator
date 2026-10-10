@@ -146,8 +146,12 @@ struct ImageEditView: View {
         NavigationStack {
             VStack(spacing: 16) {
                 if let item, let image = store.image(named: item.fileName) {
-                    TranslatedImageView(image: image, blocks: item.blocks ?? [], showTranslation: !showOriginal && item.done)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // 双指缩放、双击放大；转了方向就从头看
+                    ZoomableView {
+                        TranslatedImageView(image: image, blocks: item.blocks ?? [], showTranslation: !showOriginal && item.done)
+                    }
+                    .id(item.fileName + String(item.blocks?.first?.turns ?? 0))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     if !item.done {
                         ProgressView("重新识别中…").tint(.white).foregroundStyle(.white)
                     } else if (item.blocks ?? []).isEmpty {

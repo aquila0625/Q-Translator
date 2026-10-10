@@ -116,7 +116,9 @@ private struct Pickers: ViewModifier {
             }
         }
         .fullScreenCover(isPresented: $showCamera) {
-            CameraPicker { controller.attachImages([$0], source: "camera") }.ignoresSafeArea()
+            LiveCameraView(onCapture: { controller.attachImages([$0], source: "camera") },
+                           onSaveTranslated: { controller.addTranslatedImage($0, blocks: $1, usedAI: $2) },
+                           onPick: { controller.attachImages($0, source: "photos") })
         }
         .fileImporter(isPresented: $showFiles, allowedContentTypes: [.image], allowsMultipleSelection: true) { result in
             guard case .success(let urls) = result else { return }
@@ -162,7 +164,7 @@ extension ComposerView {
     /// 底部一行：拍照、相册、更多（文件、粘贴）、方向、AI 优化、麦克风或发送
     private func bottomRow(compact: Bool) -> some View {
         HStack(spacing: 4) {
-            if CameraPicker.isAvailable {
+            if LiveCameraView.isAvailable {
                 Button { showCamera = true } label: {
                     Image(systemName: "camera")
                         .font(.system(size: 18, weight: .medium))

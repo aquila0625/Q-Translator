@@ -198,6 +198,23 @@ struct AISettingsView: View {
             } footer: {
                 Text("Q-Translator 不提供 AI 额度，也不经过任何中间服务器：你自己在服务商那里注册，把 API Key 填在这里，费用由服务商向你收取。Key 只保存在本机钥匙串。注意 ChatGPT 的会员订阅不包含 API 额度，API Key 要在 OpenAI 开发者平台单独申请。不填也能使用词典、翻译、朗读和图片翻译。AI 用于优化句子翻译和帮你写回复；上面的开关关闭时不会自动优化，只有你点“AI 优化”才会运行。单词和短语只查词典，不用 AI。token 用量默认不显示在译文下面，可以在用量报表里查看。")
             }
+            Section {
+                if ai.provider == .openai {
+                    Text("使用上面填写的 ChatGPT API Key")
+                        .foregroundStyle(.secondary)
+                } else {
+                    SecureField("OpenAI API Key", text: Binding(get: { ai.openAIKey }, set: { ai.openAIKey = $0 }))
+                        .textContentType(.password)
+                        .autocorrectionDisabled()
+                    if let url = AIProvider.openai.signupURL {
+                        Link("去 OpenAI 注册并获取 API Key", destination: url)
+                    }
+                }
+            } header: {
+                Text("语音转写（同声传译 AI 精校）")
+            } footer: {
+                Text("AI 精校会把同声传译的录音从本机直接发给 OpenAI 重新识别（\(SpeechTranscription.model)，按 OpenAI 标价约每分钟 0.006 美元），再整篇重新翻译，中英文自动识别。费用由 OpenAI 向你收取。Claude 和 DeepSeek 没有语音转写接口，所以用它们时要在这里另外填 OpenAI 的 Key。")
+            }
 
         }
         .formStyle(.grouped)

@@ -98,6 +98,50 @@ enum AITasks {
         return try await AIClient.complete(system: system, user: "<transcript>\n\(text)\n</transcript>", config: config)
     }
 
+    /// AI 精校：一段重新识别出来的讲话，分句并逐句翻译。中文的句子译成英文，其他的译成中文。
+    /// context 是前面几句（只用来接上下文，不用翻译）
+    static func translateTranscriptChunk(_ text: String, context: [String], config: AIClient.Config) async throws -> [(String, String)] {
+        let system = """
+        You turn a speech-to-text transcript into bilingual subtitles for a live-interpretation app. The transcript is \
+        one part of a lecture, meeting or conversation, and the speakers may switch between Mandarin Chinese and English.
+
+        Split the transcript into sentences, in order, keeping each sentence as it was spoken. Fix only obvious \
+        speech-recognition mistakes (wrong homophones, broken words), and never add, drop or summarize content. \
+        Translate every sentence: a sentence that is mainly Chinese goes into natural English, any other sentence goes \
+        into natural Simplified Chinese. Keep names, numbers and technical terms accurate and consistent.
+
+        Answer with only a JSON array of objects like {"o": "original sentence", "t": "translation"}, in order, and \
+        nothing else: the app parses it.
+        """
+        var user = ""
+        if !context.isEmpty {
+            user += "<previous_sentences>\n\(context.joined(separator: "\n"))\n</previous_sentences>\n"
+            user += "(The previous sentences are context only; do not include them in your answer.)\n"
+        }
+        user += "<transcript>\n\(text)\n</transcript>"
+        let response = try await AIClient.complete(system: system, user: user, config: config)
+        guard let start = response.text.firstIndex(of: "["), let end = response.text.lastIndex(of: "]"),
+              let data = String(response.text[start...end]).data(using: .utf8),
+              let decoded = try? JSONDecoder().decode([[String: String]].self, from: data) else {
+            throw AIError(message: "AI 返回的格式不对，可以重试。")
+        }
+        return decoded.compactMap { item in
+            guard let original = item["o"]?.trimmed, !original.isEmpty else { return nil }
+            return (original, item["t"]?.trimmed ?? "")
+        }
+    }
+
+    /// 改了一句原文之后重新翻译这一句
+    static func translateLine(_ text: String, config: AIClient.Config) async throws -> String {
+        let chinese = text.isMostlyChinese
+        let system = """
+        You translate one sentence from a speech transcript in an interpretation app into \
+        \(chinese ? "natural English" : "natural Simplified Chinese"). Output only the translation, with no quotation marks, \
+        labels or explanation: the app shows it directly.
+        """
+        return try await AIClient.complete(system: system, user: text, config: config).text
+    }
+
     // MARK: 场景练习
 
     struct PracticeReply {

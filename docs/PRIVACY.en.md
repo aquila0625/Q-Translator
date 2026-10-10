@@ -18,6 +18,8 @@ Usage data is processed by the analytics service of Umeng (友盟+); see Umeng's
 
 Conversations, photos, recordings and records are stored only on your device and are deleted with the app. Translation and AI features send the text to be translated to the translation service, or to the AI provider whose key you entered, as you choose.
 
+Live-interpretation recordings are also stored only on your device. Only when you tap 精校 (AI refine) on an interpretation record and confirm does Q-Translator send that recording, using the OpenAI API key you entered, directly from your device to OpenAI for transcription, without passing through any server of ours. See OpenAI's privacy policy and API data usage policy for how OpenAI handles it.
+
 ## Your choice
 
 Q-Translator collects anonymous usage data by default. You can turn it off at any time in Settings › 关于 (About) › 隐私协议; every feature keeps working and nothing is collected afterwards.

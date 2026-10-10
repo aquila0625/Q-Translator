@@ -103,6 +103,9 @@ struct TranscriptLine: Codable, Identifiable, Equatable {
     var id = UUID()
     var original: String
     var translation: String
+    /// 这句在录音里的开始和结束时间（秒，从整条记录的第一段录音算起）；以前的记录没有
+    var start: Double?
+    var end: Double?
 }
 
 /// 会话里的一轮：一次输入（文字或几张图片）和它的翻译结果

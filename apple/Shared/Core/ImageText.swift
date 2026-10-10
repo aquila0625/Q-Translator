@@ -40,6 +40,86 @@ enum ImageText {
         }.value
     }
 
+    /// 实时相机用：识别摄像头的一帧。同步执行，调用方放在后台队列；
+    /// 太小的字和把握不大的结果直接丢掉，免得画面上乱跳
+    static func recognizeLive(_ handler: VNImageRequestHandler) -> [Block] {
+        blocks(fromLive: liveObservations(handler))
+    }
+
+    /// 实时相机：画面里的文字可能是横着的（手机横过来拍、平放在书上拍）。
+    /// 识别器横着的字也认得出来，但会当成竖排，排版和译文方向都不对。所以先按上次的方向认一遍，
+    /// 看每行字的走向：是横过来的，就换成让字摆正的方向再认一遍。返回的位置按字摆正之后的画面算
+    static func recognizeLive(preferred: CGImagePropertyOrientation,
+                              handler: (CGImagePropertyOrientation) -> VNImageRequestHandler)
+        -> (blocks: [Block], orientation: CGImagePropertyOrientation) {
+        let observations = liveObservations(handler(preferred))
+        let extra = extraRotation(observations)
+        guard extra != 0 else { return (blocks(fromLive: observations), preferred) }
+        let orientation = orientation(clockwise: (clockwise(preferred) + extra) % 360)
+        return (recognizeLive(handler(orientation)), orientation)
+    }
+
+    /// 扫描翻译拍下的照片（已经摆正成 .up）：字可能是横着的，先认一遍看每行字的走向，横着的就换方向再认。
+    /// 返回的位置按“把照片顺时针转 clockwise 度、字摆正之后”的画面算
+    static func recognizeBlocksDetectingOrientation(_ image: CGImage) -> (blocks: [Block], clockwise: Int) {
+        let observations = liveObservations(VNImageRequestHandler(cgImage: image, orientation: .up), minimumTextHeight: 0)
+        let extra = extraRotation(observations)
+        guard extra != 0 else { return (blocks(fromLive: observations), 0) }
+        let oriented = liveObservations(VNImageRequestHandler(cgImage: image, orientation: orientation(clockwise: extra)), minimumTextHeight: 0)
+        return (blocks(fromLive: oriented), extra)
+    }
+
+    private static func liveObservations(_ handler: VNImageRequestHandler, minimumTextHeight: Float = 0.008) -> [VNRecognizedTextObservation] {
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.recognitionLanguages = ["zh-Hans", "en-US"]
+        request.automaticallyDetectsLanguage = true
+        request.usesLanguageCorrection = true
+        // 书页上的小字也要能认出来
+        request.minimumTextHeight = minimumTextHeight
+        guard (try? handler.perform([request])) != nil else { return [] }
+        return (request.results ?? []).filter { ($0.topCandidates(1).first?.confidence ?? 0) >= 0.45 }
+    }
+
+    private static func blocks(fromLive lines: [VNRecognizedTextObservation]) -> [Block] {
+        // 至少要有两个字母或汉字，纯数字、符号不翻
+        blocks(from: lines).filter { block in
+            block.text.unicodeScalars.filter { $0.properties.isAlphabetic }.count >= 2
+        }
+    }
+
+    /// 文字还要顺时针转多少度才是正的：看每行从左上角到右上角的方向（坐标原点在左下角）
+    private static func extraRotation(_ lines: [VNRecognizedTextObservation]) -> Int {
+        var x = 0.0, y = 0.0
+        for line in lines {
+            x += Double(line.topRight.x - line.topLeft.x)
+            y += Double(line.topRight.y - line.topLeft.y)
+        }
+        guard x != 0 || y != 0 else { return 0 }
+        if abs(x) >= abs(y) { return x > 0 ? 0 : 180 }
+        // 往下读：字顺时针转了 90°，要再转 270°；往上读反过来
+        return y < 0 ? 270 : 90
+    }
+
+    /// 方向参数和“把画面顺时针转多少度字就正了”之间的对应
+    static func clockwise(_ orientation: CGImagePropertyOrientation) -> Int {
+        switch orientation {
+        case .right, .rightMirrored: 90
+        case .down, .downMirrored: 180
+        case .left, .leftMirrored: 270
+        default: 0
+        }
+    }
+
+    private static func orientation(clockwise angle: Int) -> CGImagePropertyOrientation {
+        switch angle {
+        case 90: .right
+        case 180: .down
+        case 270: .left
+        default: .up
+        }
+    }
+
     /// 取每段文字周围一圈的颜色（中位数），作为覆盖译文的底色
     static func backgroundColors(_ image: PlatformImage, rects: [CGRect]) -> [UInt32] {
         guard let cgImage = orientedThumbnail(image, maxSide: 640) else { return rects.map { _ in 0xFFFFFF } }

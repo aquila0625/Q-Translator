@@ -19,7 +19,7 @@ It is free and open source. Everything that can run on the device does, the app 
 - **Word list**: star a word to keep it; words learned in scene practice go there too.
 
 ### Scenarios
-- **Live interpretation**: for lectures and meetings. It listens continuously, splits speech into sentences and shows bilingual subtitles as people talk. It keeps going when you leave the page or lock the phone, can read the translation into your earphones, and saves each session as a record you can continue later, export, or summarise with AI.
+- **Live interpretation**: for lectures and meetings. It listens continuously, splits speech into sentences and shows bilingual subtitles as people talk. When Chinese and English are mixed, turn on auto Chinese/English and each sentence's language is detected for you. It keeps going when you leave the page or lock the phone, and can read the translation into your earphones. Each session is saved with its recording: tap a sentence to replay the audio from there, edit any sentence, continue later, export the transcript, SRT subtitles or the audio, summarise it with AI, or use "AI refine" to have OpenAI transcribe the whole recording again.
 - **Face to face**: put the phone on the table; the top half faces the other person. Each side taps their own button to speak, and the translation is shown in large type and read aloud.
 - **English scene practice** (needs AI): the AI plays the landlord, waiter, interviewer or any role you describe, and you answer in English by voice or text. A hands-free voice-chat mode listens automatically and sends when you pause. Unnatural sentences get a "more natural" note with the reason, without interrupting the conversation; a summary at the end lists your corrections and new phrases.
 

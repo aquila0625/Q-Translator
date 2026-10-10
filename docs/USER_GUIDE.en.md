@@ -23,7 +23,7 @@ The app opens on a translation conversation. Type in the box at the bottom; ther
 
 The privacy policy is in Settings › 关于 (About) › 隐私协议; see also the [privacy policy](PRIVACY.en.md).
 
-Everything except a few AI features works without an API key: dictionary, sentence and photo translation, voice input, reading aloud, live interpretation and face to face. Scene practice, AI polishing, reply drafting, AI voices and interpretation summaries need a key; see [section 5](#5-ai-features-and-api-keys).
+Everything except a few AI features works without an API key: dictionary, sentence and photo translation, voice input, reading aloud, live interpretation and face to face. Scene practice, AI polishing, reply drafting, AI voices, interpretation summaries and AI refine need a key; see [section 5](#5-ai-features-and-api-keys).
 
 ## 2. Translating words, sentences, speech and photos
 
@@ -65,12 +65,20 @@ The source of the translation is shown at the bottom of the card.
 <img src="images/image-edit.png" width="240" alt="Viewing a translated photo">
 </p>
 
+**Scan translation (camera)**
+
+Like WeChat's scan-to-translate: tap the camera at the bottom left of the input box, point it at the text and hold still for about 1.5 seconds. Q-Translator takes the picture by itself, translates it and lays the translation over the original text in place. You can also press the shutter at any time.
+
+- It works with the phone turned sideways or lying flat on a book; the translation follows the direction of the text.
+- After the shot the picture stays on screen. The translation is the same size as the text in the picture: **pinch to zoom in**, drag to move around, double-tap to zoom in or back out. The buttons: **重拍** (retake), **原图 / 译文** (original / translation), **旋转** (rotate the photo and translation together), **AI 翻译** (translate the whole page again with AI, needs an AI key), **列表** (original and translation as a list, clearer for dense text) and **发到会话** (save the photo and its translation straight into the conversation, without translating it again).
+- At the top you can choose the direction (auto, English → Chinese, Chinese → English), turn off 自动拍 (auto shoot) to press the shutter yourself, and turn on the torch. At the bottom you can switch cameras; pinch to zoom.
+
 **Photo translation**
 
-1. Tap the camera, or tap Photos and pick one or more images. They wait above the input box: tap one to preview it, long-press to reorder, tap × to remove it.
+1. Tap Photos and pick one or more images, or tap 发到会话 in scan translation. They wait above the input box: tap one to preview it, long-press to reorder, tap × to remove it.
 2. With AI polish on, you can type an instruction such as "only translate the dishes".
 3. Tap Send. Text is recognised on the device and the translation is drawn over the original text, on the same background colour.
-4. Use 译文 / 原图 at the top right to switch between the translation and the original. Tap the image for full screen, with four buttons:
+4. Use 译文 / 原图 at the top right to switch between the translation and the original. Tap the image for full screen; pinch to zoom, drag when zoomed in, and double-tap to zoom in or back out. There are four buttons:
    - **看原图** (show original);
    - **重新识别** (recognise again);
    - **旋转** (rotate; the translation turns with it, no re-recognition);
@@ -112,14 +120,19 @@ Inside a conversation:
 For lectures and meetings.
 
 1. Drawer › 同声传译. Choose which language to listen to, turn on 耳机朗读 if you want the translation read into your earphones, and tap 开始传译 (start).
+   - **中英自动识别 (auto Chinese/English)**: pick it when some people speak Chinese and others English. Q-Translator runs a Chinese and an English recognizer at the same time and decides the language of each sentence: English is translated into Chinese, Chinese into English. It **uses more battery and warms the phone more** than a fixed language, so pick a fixed direction when only one language is spoken.
 2. Speech is split into sentences and shown as bilingual subtitles: the original in small type, the translation below it. The sentence being spoken is highlighted and translated as it grows. Switch between bilingual, original only and translation only at the top.
-3. To change language mid-way, tap the title (同声传译 · 英 → 中 ▾) and pick the other language from the menu. Earlier subtitles are kept.
+3. To change language mid-way, tap the title (同声传译 · 英 → 中 ▾) and pick the other language or 中英自动识别 from the menu. Earlier subtitles are kept.
 4. **Background**: tap ⌄ at the top left to collapse the page; interpretation keeps running. A bar above the input box shows it is running; tap it to go back. It also keeps listening, translating and reading aloud when you go to the Home Screen or lock the phone.
-5. Tap the red stop button to finish. The subtitles are saved as a record.
+5. Tap the red stop button to finish. The subtitles and the audio recording are saved as a record. The recording stays on your device (about 13 MB per hour).
 6. In the record list:
-   - tap 继续 (continue) to add to a record, for example after a lecture break;
-   - tap a record to read it, copy it, export it, or get an AI summary (要点);
-   - use ··· to rename or delete it.
+   - tap 继续 (continue) to add to a record, for example after a lecture break; the recording continues too;
+   - tap a record to read it. A player bar sits at the top: **tap a sentence to play the audio from there**, and the sentence being played is highlighted;
+   - **long-press a sentence to edit** the original and the translation; after changing the original you can re-translate it;
+   - 导出 (export) copies the full text or exports a transcript, SRT subtitles with timings (for video editors), or the recording as m4a;
+   - 要点 asks AI for a summary;
+   - use ··· to rename or delete it (the recording is deleted too).
+7. **AI 精校 (AI refine)**, needs an OpenAI key: live subtitles come from on-device speech recognition, which can mishear accents and technical terms. Tap 精校 and Q-Translator sends the whole recording straight to OpenAI to transcribe it again (mixed Chinese and English is detected automatically), then translates the whole text: Chinese into English, English into Chinese. At OpenAI's list price transcription costs about $0.006 per minute ($0.36 per hour); translation is billed by your AI provider. The refined version is kept next to the live subtitles, so you can switch between them at the top and keep editing. You can leave the page while it runs, but keep the app open.
 
 Tip: download the English and Chinese models in Settings › 离线翻译和语音识别模型 for faster, offline interpretation.
 
@@ -170,6 +183,7 @@ Q-Translator has no AI credit and no server of its own. You create an account wi
 | AI polish, reply drafting, photo instructions | Any |
 | English scene practice | Any |
 | Interpretation summaries | Any |
+| Interpretation AI refine (re-transcribing the recording) | Transcription needs an OpenAI (ChatGPT) key; translation uses your chosen provider, or the same OpenAI key if none is set |
 | AI voices (most natural reading) | OpenAI (ChatGPT) key only |
 
 ### Which provider
@@ -177,7 +191,7 @@ Q-Translator has no AI credit and no server of its own. You create an account wi
 | Provider | Good for | Sign up |
 | --- | --- | --- |
 | **Claude (Anthropic)** | High-quality translation and writing | <https://platform.claude.com/> |
-| **ChatGPT (OpenAI)** | Also unlocks the AI voices | <https://platform.openai.com/api-keys> |
+| **ChatGPT (OpenAI)** | Also unlocks the AI voices and interpretation AI refine | <https://platform.openai.com/api-keys> |
 | **DeepSeek** | Low price, strong Chinese, pay with Alipay or WeChat | <https://platform.deepseek.com/> |
 | **Custom** | Any OpenAI-compatible service (Qwen, Kimi, GLM…) | see below |
 

@@ -15,7 +15,7 @@ final class ConversationStore: ObservableObject {
     private var saveTask: Task<Void, Never>?
     private let imageCache = NSCache<NSString, PlatformImage>()
 
-    static let directory: URL = {
+    nonisolated static let directory: URL = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let url = base.appendingPathComponent("QTranslator", isDirectory: true)
         #if os(macOS)
@@ -29,7 +29,7 @@ final class ConversationStore: ObservableObject {
         return url
     }()
 
-    static let imagesDirectory: URL = {
+    nonisolated static let imagesDirectory: URL = {
         let url = directory.appendingPathComponent("images", isDirectory: true)
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
@@ -251,9 +251,9 @@ final class ConversationStore: ObservableObject {
     // MARK: 图片和录音文件
 
     /// 录音等其他文件和图片放在同一个文件夹
-    static func mediaURL(_ name: String) -> URL { imagesDirectory.appendingPathComponent(name) }
+    nonisolated static func mediaURL(_ name: String) -> URL { imagesDirectory.appendingPathComponent(name) }
 
-    static func deleteMediaFile(_ name: String) {
+    nonisolated static func deleteMediaFile(_ name: String) {
         try? FileManager.default.removeItem(at: mediaURL(name))
     }
 

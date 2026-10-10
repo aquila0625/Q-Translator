@@ -70,14 +70,15 @@ private struct InterpreterScreen: View {
             GlassIconButton(systemName: "chevron.down", label: "收起，传译在后台继续") { dismiss() }
             // 点开下拉选语言，不会一碰就切换
             Menu {
-                directionOption(fromChinese: false)
-                directionOption(fromChinese: true)
+                modeOption(chinese: false, auto: false)
+                modeOption(chinese: true, auto: false)
+                modeOption(chinese: interpreter.sourceIsChinese, auto: true)
             } label: {
                 HStack(spacing: 8) {
                     if interpreter.state == .running {
                         Circle().fill(Color.red).frame(width: 8, height: 8)
                     }
-                    Text("同声传译 · " + (interpreter.sourceIsChinese ? "中 → 英" : "英 → 中"))
+                    Text("同声传译 · " + InterpreterMode.shortTitle(chinese: interpreter.sourceIsChinese, auto: interpreter.autoLanguage))
                         .font(.callout.weight(.semibold))
                     Image(systemName: "chevron.down").font(.caption.weight(.bold)).foregroundStyle(.secondary)
                     TimelineView(.periodic(from: .now, by: 1)) { _ in
@@ -105,15 +106,16 @@ private struct InterpreterScreen: View {
         .padding(.top, 8)
     }
 
-    /// 下拉里的一项：选了和现在不同的语言，就中途换方向（前面的字幕保留，后面按新语言识别）
-    private func directionOption(fromChinese: Bool) -> some View {
-        Button {
-            Task { await session.switchDirection(toChinese: fromChinese) }
+    /// 下拉里的一项：选了和现在不同的，就中途换（前面的字幕保留，后面按新设置识别）
+    private func modeOption(chinese: Bool, auto: Bool) -> some View {
+        let selected = interpreter.autoLanguage == auto && (auto || interpreter.sourceIsChinese == chinese)
+        return Button {
+            Task { await session.switchMode(toChinese: chinese, auto: auto) }
         } label: {
-            if interpreter.sourceIsChinese == fromChinese {
-                Label(fromChinese ? "听中文，译成英语" : "听英语，译成中文", systemImage: "checkmark")
+            if selected {
+                Label(InterpreterMode.title(chinese: chinese, auto: auto), systemImage: "checkmark")
             } else {
-                Text(fromChinese ? "听中文，译成英语" : "听英语，译成中文")
+                Text(InterpreterMode.title(chinese: chinese, auto: auto))
             }
         }
     }
@@ -174,7 +176,7 @@ private struct InterpreterScreen: View {
         case .failed(let message):
             VStack(spacing: 12) {
                 Label(message, systemImage: "exclamationmark.triangle").multilineTextAlignment(.center)
-                Button("重试") { Task { await interpreter.start(sourceIsChinese: interpreter.sourceIsChinese) } }
+                Button("重试") { Task { await interpreter.start(sourceIsChinese: interpreter.sourceIsChinese, autoLanguage: interpreter.autoLanguage) } }
                     .buttonStyle(.glassProminent)
             }
             .padding(20)
@@ -182,10 +184,11 @@ private struct InterpreterScreen: View {
             if previous.isEmpty, interpreter.segments.isEmpty, interpreter.live.isEmpty, interpreter.state == .running {
                 VStack(spacing: 8) {
                     Image(systemName: "waveform").font(.largeTitle).foregroundStyle(Color.lxAccent)
-                    Text(interpreter.sourceIsChinese ? "正在听中文，说完一句就会翻译" : "正在听英语，说完一句就会翻译")
+                    Text(interpreter.autoLanguage ? "正在听中文和英文，说完一句就会翻译" :
+                         (interpreter.sourceIsChinese ? "正在听中文，说完一句就会翻译" : "正在听英语，说完一句就会翻译"))
                         .foregroundStyle(.secondary)
                     Text((interpreter.engineName.isEmpty ? "" : interpreter.engineName + " · ")
-                         + (translator.onDevice ? "本机翻译" : "在线翻译") + " · 录音不上传")
+                         + (translator.onDevice ? "本机翻译" : "在线翻译") + " · 录音只存在本机")
                         .font(.footnote).foregroundStyle(.tertiary)
                 }
             }
@@ -253,4 +256,17 @@ private struct InterpreterScreen: View {
             dismiss()
         }
     }
+}
+
+/// 同声传译听哪种语言的说法
+enum InterpreterMode {
+    static func title(chinese: Bool, auto: Bool) -> String {
+        auto ? "中英自动识别（更耗电）" : (chinese ? "听中文，译成英语" : "听英语，译成中文")
+    }
+
+    static func shortTitle(chinese: Bool, auto: Bool) -> String {
+        auto ? "中英自动" : (chinese ? "中 → 英" : "英 → 中")
+    }
+
+    static let batteryNote = "中英自动识别会同时开中文和英文两个识别器，更耗电、手机更容易发热。只有一种语言时，选固定方向更省电。"
 }

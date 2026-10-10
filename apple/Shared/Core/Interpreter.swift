@@ -11,6 +11,9 @@ final class Interpreter: ObservableObject {
         let id = UUID()
         var original: String
         var translation: String?
+        /// 在这一段录音里的时间（秒）
+        var start: Double?
+        var end: Double?
     }
 
     enum State: Equatable {
@@ -32,6 +35,8 @@ final class Interpreter: ObservableObject {
     @Published private(set) var startedAt: Date?
     /// 原文语言：true 是中文（中 → 英），false 是英语（英 → 中）
     @Published private(set) var sourceIsChinese = false
+    /// 中英自动识别：中文和英文两个识别器同时听，每句自动判断语言（更耗电）
+    @Published private(set) var autoLanguage = false
     /// 用耳机朗读译文
     @Published var speakTranslations = UserDefaults.standard.bool(forKey: SettingsKey.interpreterSpeak)
 
@@ -56,6 +61,16 @@ final class Interpreter: ObservableObject {
     private var emittedLetters = 0
     /// 暂停时累计的时长
     private var elapsedBeforePause: TimeInterval = 0
+    /// 同时把声音录成文件，之后可以回放、导出，也可以交给 AI 精校
+    private let recorder = InterpretRecorder()
+    /// 正在说的这句大概从录音的第几秒开始
+    private var sentenceStart: Double?
+    /// 中英自动识别：两个识别器的结果合成一条字幕
+    private var merger = BilingualMerger()
+    private var englishResultsTask: Task<Void, Never>?
+    private var ticker: Task<Void, Never>?
+    /// 自动识别开始时已经录了多少秒（识别结果的时间从 0 算起）
+    private var mergerOffset = 0.0
 
     init(translate: @escaping (String, Bool, Bool) async -> String?) {
         self.translate = translate
@@ -69,14 +84,16 @@ final class Interpreter: ObservableObject {
 
     // MARK: 开始、暂停、结束
 
-    func start(sourceIsChinese: Bool) async {
+    func start(sourceIsChinese: Bool, autoLanguage: Bool = false) async {
         self.sourceIsChinese = sourceIsChinese
+        self.autoLanguage = autoLanguage
         guard await requestPermissions() else {
             state = .failed("需要允许使用麦克风和语音识别，可以在系统设置里打开。")
             return
         }
         do {
             try await startRecognition()
+            recorder.open()
             try startAudio()
             startedAt = Date()
             state = .running
@@ -85,6 +102,7 @@ final class Interpreter: ObservableObject {
             #endif
         } catch {
             stopAudio()
+            recorder.discard()
             state = .failed("没法开始同传：\(error.localizedDescription)")
         }
     }
@@ -117,7 +135,14 @@ final class Interpreter: ObservableObject {
         _ = recognizer
         try? await analyzer?.finalizeAndFinishThroughEndOfInput()
         await resultsTask?.value
-        if !live.trimmed.isEmpty { emit(live) }
+        await englishResultsTask?.value
+        ticker?.cancel()
+        ticker = nil
+        if autoLanguage {
+            emitMerged(merger.finish())
+        } else if !live.trimmed.isEmpty {
+            emit(live)
+        }
         live = ""
         analyzer = nil
         transcriber = nil
@@ -129,17 +154,27 @@ final class Interpreter: ObservableObject {
         #endif
     }
 
-    /// 中途换方向：前面的字幕保留，后面按新语言识别。
+    /// 结束后取走这段录音（文件名和时长）；没录到声音就是 nil
+    func takeRecording() -> InterpretRecord.AudioPart? {
+        recorder.close()
+    }
+
+    /// 中途换语言（英语、中文或中英自动）：前面的字幕保留，后面按新设置识别。
     /// 录音不停，只换识别器：正在说的半句直接收进字幕，不等旧的识别器收尾，所以很快
-    func switchDirection() async {
+    func switchMode(sourceIsChinese chinese: Bool, autoLanguage auto: Bool) async {
         let wasRunning = state == .running
         let wasPaused = state == .paused
-        guard wasRunning || wasPaused else { return }
-        if !live.trimmed.isEmpty { emit(live) }
+        guard wasRunning || wasPaused, chinese != sourceIsChinese || auto != autoLanguage else { return }
+        if autoLanguage {
+            emitMerged(merger.finish())
+        } else if !live.trimmed.isEmpty {
+            emit(live)
+        }
         live = ""
         stopRecognition()
-        sourceIsChinese.toggle()
-        state = .preparing("正在切换到\(sourceIsChinese ? "中文" : "英语")…")
+        sourceIsChinese = chinese
+        autoLanguage = auto
+        state = .preparing(auto ? "正在切换到中英自动识别…" : "正在切换到\(chinese ? "中文" : "英语")…")
         do {
             try await startRecognition()
             // 新旧识别要的声音格式可能不一样：重装录音回调，音频通道不用关
@@ -166,6 +201,10 @@ final class Interpreter: ObservableObject {
         input = nil
         resultsTask?.cancel()
         resultsTask = nil
+        englishResultsTask?.cancel()
+        englishResultsTask = nil
+        ticker?.cancel()
+        ticker = nil
         legacyGeneration += 1
         legacyTask?.cancel()
         legacyTask = nil
@@ -204,6 +243,16 @@ final class Interpreter: ObservableObject {
     // MARK: 识别
 
     private func startRecognition() async throws {
+        if autoLanguage {
+            do {
+                try await startBilingualRecognition()
+                return
+            } catch {
+                // 这台设备做不了两种语言同时识别：退回只听一种语言
+                log.error("interpreter: bilingual failed \(error.localizedDescription, privacy: .public)")
+                autoLanguage = false
+            }
+        }
         let id = sourceIsChinese ? "zh-CN" : "en-US"
         guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: Locale(identifier: id)) else {
             try await startLegacyRecognition()
@@ -251,6 +300,86 @@ final class Interpreter: ObservableObject {
                 }
             } catch {}
         }
+    }
+
+    /// 中英自动识别：同一份声音同时交给中文和英文两个识别器，结果交给 BilingualMerger 合成一条字幕。
+    /// 要“快速结果”：不然中文识别器要攒十几秒才更新一次
+    private func startBilingualRecognition() async throws {
+        guard let zhLocale = await SpeechTranscriber.supportedLocale(equivalentTo: Locale(identifier: "zh-CN")),
+              let enLocale = await SpeechTranscriber.supportedLocale(equivalentTo: Locale(identifier: "en-US")) else {
+            throw InterpreterError.unsupported
+        }
+        let attributes: Set<SpeechTranscriber.ResultAttributeOption> = [.audioTimeRange, .transcriptionConfidence]
+        let zh = SpeechTranscriber(locale: zhLocale, transcriptionOptions: [], reportingOptions: [.volatileResults, .fastResults],
+                                   attributeOptions: attributes)
+        let en = SpeechTranscriber(locale: enLocale, transcriptionOptions: [], reportingOptions: [.volatileResults, .fastResults],
+                                   attributeOptions: attributes)
+        try await reserve(zhLocale)
+        try await reserve(enLocale)
+        for (transcriber, name) in [(zh, "中文"), (en, "英语")] {
+            if await AssetInventory.status(forModules: [transcriber]) == .unsupported { throw InterpreterError.unsupported }
+            if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
+                state = .preparing("正在下载\(name)识别模型…")
+                try await request.downloadAndInstall()
+            }
+        }
+        let analyzer = SpeechAnalyzer(modules: [zh, en])
+        guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [zh, en]) else {
+            throw InterpreterError.unsupported
+        }
+        targetFormat = format
+        let (stream, continuation) = AsyncStream<AnalyzerInput>.makeStream()
+        input = continuation
+        sink.setContinuation(continuation)
+        try await analyzer.start(inputSequence: stream)
+        self.analyzer = analyzer
+        self.transcriber = zh
+        engineName = "中英自动识别"
+        merger = BilingualMerger()
+        mergerOffset = recorder.seconds
+        resultsTask = Task { [weak self] in
+            do {
+                for try await result in zh.results {
+                    if Task.isCancelled { break }
+                    let end = (result.range.start + result.range.duration).seconds
+                    await self?.handleMerged(chinese: true, result.text, isFinal: result.isFinal, end: end)
+                }
+            } catch {}
+        }
+        englishResultsTask = Task { [weak self] in
+            do {
+                for try await result in en.results {
+                    if Task.isCancelled { break }
+                    let end = (result.range.start + result.range.duration).seconds
+                    await self?.handleMerged(chinese: false, result.text, isFinal: result.isFinal, end: end)
+                }
+            } catch {}
+        }
+        // 停顿时不会有新结果：定时推一下，让说完的最后一句及时出来
+        ticker = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(300))
+                guard let self, self.state == .running else { continue }
+                self.emitMerged(self.merger.advance(to: self.recorder.seconds - self.mergerOffset))
+                self.updateMergedLive()
+            }
+        }
+    }
+
+    private func handleMerged(chinese: Bool, _ text: AttributedString, isFinal: Bool, end: Double) {
+        let sentences = chinese ? merger.addChinese(text, isFinal: isFinal, end: end) : merger.addEnglish(text, isFinal: isFinal, end: end)
+        emitMerged(sentences)
+        updateMergedLive()
+    }
+
+    private func emitMerged(_ sentences: [BilingualMerger.Sentence]) {
+        for sentence in sentences {
+            emit(sentence.text, chinese: sentence.chinese, start: sentence.start + mergerOffset, end: sentence.end + mergerOffset)
+        }
+    }
+
+    private func updateMergedLive() {
+        if merger.live != live { live = merger.live }
     }
 
     /// 老识别接口：一次识别结束（说完一段或者到了时长上限）就接着开下一次，保持一直在听
@@ -323,6 +452,8 @@ final class Interpreter: ObservableObject {
             emittedLetters = 0
             live = ""
         } else {
+            // 新的一句开始出字了：识别比说话晚大约一秒，往前推一点
+            if !rest.isEmpty, sentenceStart == nil { sentenceStart = max(0, recorder.seconds - 1) }
             live = rest
         }
     }
@@ -370,7 +501,7 @@ final class Interpreter: ObservableObject {
             return
         }
         liveTranslating = true
-        let chinese = sourceIsChinese
+        let chinese = autoLanguage ? merger.liveChinese : sourceIsChinese
         Task {
             let result = await translate(text, chinese, true)
             liveTranslating = false
@@ -383,16 +514,21 @@ final class Interpreter: ObservableObject {
         }
     }
 
-    private func emit(_ sentence: String) {
+    /// 说完的一句：自动识别时带上判断出的语言和时间，否则按当前语言、用录音的时间估计
+    private func emit(_ sentence: String, chinese: Bool? = nil, start: Double? = nil, end: Double? = nil) {
         let text = sentence.trimmed
         guard text.count > 1 else { return }
         // 说完的这句先用边说边翻的译文顶上，正式译文出来再替换
-        var segment = Segment(original: text)
-        segment.translation = liveTranslation.isEmpty ? nil : liveTranslation
+        let now = recorder.seconds
+        var segment = Segment(original: text, start: start ?? sentenceStart ?? segments.last?.end ?? max(0, now - 3), end: end ?? now)
+        sentenceStart = nil
+        let chinese = chinese ?? sourceIsChinese
+        // 边说边翻的译文是同一种语言时才能顶上
+        let liveMatches = !autoLanguage || merger.liveChinese == chinese
+        segment.translation = liveTranslation.isEmpty || !liveMatches ? nil : liveTranslation
         liveTranslation = ""
         segments.append(segment)
         let id = segment.id
-        let chinese = sourceIsChinese
         Task {
             let translation = await translate(text, chinese, false) ?? "（翻译失败）"
             if let i = segments.firstIndex(where: { $0.id == id }) { segments[i].translation = translation }
@@ -439,8 +575,10 @@ final class Interpreter: ObservableObject {
         }
         let target = targetFormat
         let sink = self.sink
+        let recorder = self.recorder
         node.removeTap(onBus: 0)
         node.installTap(onBus: 0, bufferSize: 2048, format: format) { [weak self] buffer, _ in
+            recorder.write(buffer)
             if let converter, let target {
                 sink.convertAndSend(buffer, converter: converter, target: target)
             } else {
@@ -586,5 +724,95 @@ private final class AnalyzerSink: @unchecked Sendable {
         }
         guard error == nil, out.frameLength > 0 else { return }
         lock.withLock { _ = continuation?.yield(AnalyzerInput(buffer: out)) }
+    }
+}
+
+/// 同声传译的录音：转成 16 kHz 单声道 AAC（每小时大约 11 MB），语音转写用这个采样率正好。
+/// 在录音线程上写，用锁保护
+final class InterpretRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var file: AVAudioFile?
+    private var name: String?
+    private var converter: AVAudioConverter?
+    private var frames: AVAudioFramePosition = 0
+    private static let sampleRate = 16_000.0
+
+    /// 已经录了多少秒
+    var seconds: Double {
+        lock.withLock { Double(frames) / Self.sampleRate }
+    }
+
+    func open() {
+        let name = "interpret-\(UUID().uuidString).m4a"
+        var settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: Self.sampleRate,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderBitRateKey: 24_000,
+        ]
+        var file = try? AVAudioFile(forWriting: ConversationStore.mediaURL(name), settings: settings,
+                                    commonFormat: .pcmFormatFloat32, interleaved: false)
+        if file == nil {
+            // 个别设备不接受这个码率，用默认码率再试一次
+            settings[AVEncoderBitRateKey] = nil
+            file = try? AVAudioFile(forWriting: ConversationStore.mediaURL(name), settings: settings,
+                                    commonFormat: .pcmFormatFloat32, interleaved: false)
+        }
+        lock.withLock {
+            self.file = file
+            self.name = file == nil ? nil : name
+            converter = nil
+            frames = 0
+        }
+    }
+
+    func write(_ buffer: AVAudioPCMBuffer) {
+        lock.withLock {
+            guard let file else { return }
+            let target = file.processingFormat
+            // 换了声音设备时输入格式会变，转换器跟着换
+            if converter?.inputFormat != buffer.format {
+                converter = AVAudioConverter(from: buffer.format, to: target)
+            }
+            guard let converter else { return }
+            let ratio = target.sampleRate / buffer.format.sampleRate
+            guard let out = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 64)
+            else { return }
+            var given = false
+            var error: NSError?
+            converter.convert(to: out, error: &error) { _, status in
+                if given {
+                    status.pointee = .noDataNow
+                    return nil
+                }
+                given = true
+                status.pointee = .haveData
+                return buffer
+            }
+            guard error == nil, out.frameLength > 0 else { return }
+            if (try? file.write(from: out)) != nil { frames += AVAudioFramePosition(out.frameLength) }
+        }
+    }
+
+    /// 关闭文件，返回录好的这一段；太短（不到 1 秒）就删掉
+    func close() -> InterpretRecord.AudioPart? {
+        let (name, seconds) = lock.withLock { () -> (String?, Double) in
+            let result = (self.name, Double(frames) / Self.sampleRate)
+            file = nil
+            self.name = nil
+            converter = nil
+            frames = 0
+            return result
+        }
+        guard let name else { return nil }
+        guard seconds >= 1 else {
+            ConversationStore.deleteMediaFile(name)
+            return nil
+        }
+        return InterpretRecord.AudioPart(name: name, duration: seconds)
+    }
+
+    func discard() {
+        if let part = close() { ConversationStore.deleteMediaFile(part.name) }
     }
 }

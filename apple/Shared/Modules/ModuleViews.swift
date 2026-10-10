@@ -340,6 +340,7 @@ struct InterpretHome<Top: View>: View {
     let onStart: (UUID?) -> Void
 
     @AppStorage("interpreter.sourceIsChinese") private var fromChinese = false
+    @AppStorage("interpreter.autoLanguage") private var autoLanguage = false
     @AppStorage(SettingsKey.interpreterSpeak) private var speak = false
     @ObservedObject private var session = InterpretSession.shared
 
@@ -348,12 +349,13 @@ struct InterpretHome<Top: View>: View {
             VStack(spacing: 12) {
                 HStack(spacing: 8) {
                     Menu {
-                        Picker("语言", selection: $fromChinese) {
-                            Text("听英语，译成中文").tag(false)
-                            Text("听中文，译成英语").tag(true)
+                        Picker("语言", selection: mode) {
+                            Text(InterpreterMode.title(chinese: false, auto: false)).tag(0)
+                            Text(InterpreterMode.title(chinese: true, auto: false)).tag(1)
+                            Text(InterpreterMode.title(chinese: false, auto: true)).tag(2)
                         }
                     } label: {
-                        chipLabel(fromChinese ? "中 → 英" : "英 → 中", symbol: "chevron.down", on: false)
+                        chipLabel(InterpreterMode.shortTitle(chinese: fromChinese, auto: autoLanguage), symbol: "chevron.down", on: false)
                     }
                     .buttonStyle(.plain)
                     .menuIndicator(.hidden)
@@ -372,6 +374,12 @@ struct InterpretHome<Top: View>: View {
                     .font(.footnote)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(AppModule.interpret.ink)
+                if autoLanguage {
+                    Label(InterpreterMode.batteryNote, systemImage: "battery.25percent")
+                        .font(.footnote)
+                        .foregroundStyle(Color.lxAI)
+                        .multilineTextAlignment(.leading)
+                }
             }
             .padding(18)
             .frame(maxWidth: .infinity)
@@ -390,6 +398,14 @@ struct InterpretHome<Top: View>: View {
         }
     }
 
+    /// 0 英 → 中，1 中 → 英，2 中英自动
+    private var mode: Binding<Int> {
+        Binding(get: { autoLanguage ? 2 : (fromChinese ? 1 : 0) }, set: { value in
+            autoLanguage = value == 2
+            if value != 2 { fromChinese = value == 1 }
+        })
+    }
+
     private func chipLabel(_ title: String, symbol: String, on: Bool) -> some View {
         Label(title, systemImage: symbol)
             .font(.system(size: 14, weight: .bold))
@@ -403,180 +419,6 @@ struct InterpretHome<Top: View>: View {
     private func chip(_ title: String, symbol: String, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) { chipLabel(title, symbol: symbol, on: on) }
             .buttonStyle(.plain)
-    }
-}
-
-/// 一条传译记录的全文：对照、原文、译文三种显示，可以复制、导出、让 AI 总结要点、接着录
-struct InterpretRecordPage: View {
-    let id: UUID
-    @ObservedObject var store: ModuleStore
-    let onBack: () -> Void
-    let onContinue: () -> Void
-
-    @AppStorage("interpreter.display") private var display = 0
-    @State private var renaming = false
-    @State private var renameText = ""
-    @State private var confirmDelete = false
-    @State private var summarizing = false
-    @State private var summaryError: String?
-    @ObservedObject private var ai = AISettings.shared
-
-    var body: some View {
-        if let record = store.interpretation(id) {
-            VStack(spacing: 0) {
-                ModuleTopBar(title: record.title, onBack: onBack) {
-                    Menu {
-                        Button("改名", systemImage: "pencil") {
-                            renameText = record.title
-                            renaming = true
-                        }
-                        Button("删除", systemImage: "trash", role: .destructive) { confirmDelete = true }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 17, weight: .medium))
-                            .frame(width: 44, height: 44)
-                            .contentShape(.circle)
-                    }
-                    .buttonStyle(.plain)
-                    .glassEffect(.regular.interactive(), in: .circle)
-                    .accessibilityLabel("更多")
-                }
-                Text("\(record.createdAt.formatted(.dateTime.month().day().hour().minute())) · \(record.lines.count) 句 · \(AudioReplayButton.format(record.duration)) · \(record.sourceIsChinese ? "中 → 英" : "英 → 中")")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 8)
-                Picker("显示", selection: $display) {
-                    Text("对照").tag(0)
-                    Text("原文").tag(1)
-                    Text("译文").tag(2)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 8) {
-                        if let summary = record.summary { summaryCard(summary) }
-                        ForEach(record.lines) { line in
-                            VStack(alignment: .leading, spacing: 3) {
-                                if display != 2 {
-                                    Text(line.original)
-                                        .font(.system(size: display == 1 ? 17 : 14))
-                                        .foregroundStyle(display == 1 ? .primary : .secondary)
-                                }
-                                if display != 1 {
-                                    Text(line.translation).font(.system(size: 16, weight: .medium))
-                                }
-                            }
-                            .textSelection(.enabled)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        Color.clear.frame(height: 80)
-                    }
-                    .padding(.horizontal, 12)
-                    .frame(maxWidth: 680)
-                    .frame(maxWidth: .infinity)
-                }
-                .overlay(alignment: .bottom) { actionBar(record) }
-            }
-            .alert("改名", isPresented: $renaming) {
-                TextField("名称", text: $renameText)
-                Button("取消", role: .cancel) {}
-                Button("保存") {
-                    let name = renameText.trimmed
-                    if !name.isEmpty { store.updateInterpretation(id) { $0.title = name } }
-                }
-            }
-            .confirmationDialog("删除“\(record.title)”？", isPresented: $confirmDelete, titleVisibility: .visible) {
-                Button("删除", role: .destructive) {
-                    store.deleteInterpretation(id)
-                    onBack()
-                }
-            }
-        } else {
-            Color.clear.onAppear(perform: onBack)
-        }
-    }
-
-    private func exportText(_ record: InterpretRecord) -> String {
-        record.title + "\n\n" + record.lines.map { $0.original + "\n" + $0.translation }.joined(separator: "\n\n")
-    }
-
-    private func summaryCard(_ summary: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Label("要点", systemImage: "sparkles").font(.caption.weight(.bold)).foregroundStyle(Color.lxAI)
-                Spacer()
-                CopyButton(text: summary, label: "复制要点")
-            }
-            Text(summary).font(.subheadline).textSelection(.enabled)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.lxAISoft, in: .rect(cornerRadius: 16))
-    }
-
-    private func actionBar(_ record: InterpretRecord) -> some View {
-        VStack(spacing: 6) {
-            if let summaryError {
-                Text(summaryError).font(.caption).foregroundStyle(Color.lxAI)
-            }
-            HStack(spacing: 8) {
-                barButton("复制", "doc.on.doc") { Clipboard.copy(exportText(record)) }
-                ShareLink(item: exportText(record)) {
-                    barLabel("导出", "square.and.arrow.up")
-                }
-                .buttonStyle(.plain)
-                barButton(summarizing ? "总结中…" : "要点", "sparkles", tint: .lxAI) { summarize(record) }
-                    .disabled(summarizing)
-                Button(action: onContinue) {
-                    Label("继续", systemImage: "mic.fill")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(Color.lxBackground)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(Color.lxTranscriptInk, in: .capsule)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 12)
-        .padding(.top, 8)
-        .background(.bar)
-    }
-
-    private func barLabel(_ title: String, _ symbol: String, tint: Color = .primary) -> some View {
-        Label(title, systemImage: symbol)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(tint)
-            .padding(.horizontal, 12)
-            .frame(minHeight: 44)
-            .glassEffect(.regular.interactive(), in: .capsule)
-    }
-
-    private func barButton(_ title: String, _ symbol: String, tint: Color = .primary, action: @escaping () -> Void) -> some View {
-        Button(action: action) { barLabel(title, symbol, tint: tint) }.buttonStyle(.plain)
-    }
-
-    private func summarize(_ record: InterpretRecord) {
-        guard ai.isConfigured else {
-            NotificationCenter.default.post(name: .needAI, object: nil)
-            summaryError = "要先配置 AI 的 API Key。"
-            return
-        }
-        summaryError = nil
-        summarizing = true
-        Task {
-            defer { summarizing = false }
-            do {
-                Analytics.track(.interpretSummary)
-                let response = try await AITasks.summarizeTranscript(record.lines, config: AIClient.currentConfig)
-                store.updateInterpretation(id) { $0.summary = response.text }
-            } catch {
-                summaryError = error.localizedDescription
-            }
-        }
     }
 }
 

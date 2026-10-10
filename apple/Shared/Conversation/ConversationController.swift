@@ -213,6 +213,24 @@ final class ConversationController: ObservableObject {
         Task { await process(sessionID, turn.id) }
     }
 
+    /// 扫描翻译里已经翻译好的照片：原图和译文直接存成一轮，不用再识别、翻译
+    func addTranslatedImage(_ image: PlatformImage, blocks: [ImageBlock], usedAI: Bool) {
+        guard let file = ConversationStore.saveImage(image) else { return }
+        let recognized = blocks.map(\.text).joined(separator: "\n")
+        var item = TurnImage(fileName: file)
+        item.recognized = recognized
+        item.blocks = blocks
+        item.translation = blocks.map(\.translation).filter { !$0.isEmpty }.joined(separator: "\n")
+        item.done = true
+        if blocks.contains(where: { $0.translation.isEmpty }) { item.failed = true }
+        var turn = Turn(source: recognized, images: [item], sourceIsChinese: recognized.isMostlyChinese, manualDirection: false)
+        turn.state = .done
+        let sessionID = currentID
+        store.appendTurn(turn, to: sessionID)
+        autoTitle(sessionID, from: "图片翻译")
+        Analytics.track(.imageTranslate, ["source": "scan", "count": "1", "ai": usedAI ? "on" : "off", "instruction": "no"])
+    }
+
     /// 把译文放到原文的位置再反向翻译一次，作为新的一轮
     func swap(_ turn: Turn) {
         guard let translation = turn.sentence?.displayed else { return }

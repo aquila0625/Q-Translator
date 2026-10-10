@@ -30,3 +30,12 @@ settings_speed,调整朗读速度,多参数类型事件,speed 速度
 update_prompt,弹出更新提示,多参数类型事件,version 新版本号
 update_accept,点击更新,多参数类型事件,version 新版本号
 update_skip,跳过此版本,多参数类型事件,version 新版本号
+interpret_refine,传译 AI 精校,多参数类型事件,result ok/error/cancel；minutes 录音时长档位；seconds 耗时档位
+interpret_export,导出传译,多参数类型事件,type text/srt/audio
+interpret_edit,修改传译字幕,多参数类型事件,retranslate 是否重新翻译 yes/no
+camera_live_open,打开扫描翻译,多参数类型事件,无
+camera_live_shutter,扫描翻译拍照,多参数类型事件,auto 是否自动拍 yes/no；direction 方向 auto/enToZh/zhToEn；camera 前后摄像头 back/front
+camera_live_ai,扫描翻译 AI 翻译,多参数类型事件,无
+camera_live_flip,扫描翻译切换前后摄像头,多参数类型事件,to 切到 back/front
+camera_live_direction,扫描翻译切换方向,多参数类型事件,direction auto/enToZh/zhToEn
+camera_live_translate_switch,扫描翻译开关自动扫描,多参数类型事件,state on/off

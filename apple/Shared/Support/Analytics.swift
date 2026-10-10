@@ -34,6 +34,9 @@ enum Analytics {
         case interpretSwitch = "interpret_switch"
         case interpretMinimize = "interpret_minimize"
         case interpretSummary = "interpret_summary"
+        case interpretRefine = "interpret_refine"
+        case interpretExport = "interpret_export"
+        case interpretEdit = "interpret_edit"
         case faceStart = "face_start"
         case faceFinish = "face_finish"
         case practiceStart = "practice_start"
@@ -46,6 +49,12 @@ enum Analytics {
         case updatePrompt = "update_prompt"
         case updateAccept = "update_accept"
         case updateSkip = "update_skip"
+        case cameraLiveOpen = "camera_live_open"
+        case cameraLiveShutter = "camera_live_shutter"
+        case cameraLiveAI = "camera_live_ai"
+        case cameraLiveFlip = "camera_live_flip"
+        case cameraLiveDirection = "camera_live_direction"
+        case cameraLiveTranslateSwitch = "camera_live_translate_switch"
 
         var title: String {
             switch self {
@@ -68,6 +77,9 @@ enum Analytics {
             case .interpretSwitch: "传译切换语言"
             case .interpretMinimize: "传译收起到后台"
             case .interpretSummary: "传译 AI 要点"
+            case .interpretRefine: "传译 AI 精校"
+            case .interpretExport: "导出传译"
+            case .interpretEdit: "修改传译字幕"
             case .faceStart: "开始面对面对话"
             case .faceFinish: "结束面对面对话"
             case .practiceStart: "开始场景练习"
@@ -80,6 +92,12 @@ enum Analytics {
             case .updatePrompt: "弹出更新提示"
             case .updateAccept: "点击更新"
             case .updateSkip: "跳过此版本"
+            case .cameraLiveOpen: "打开扫描翻译"
+            case .cameraLiveShutter: "扫描翻译拍照"
+            case .cameraLiveAI: "扫描翻译 AI 翻译"
+            case .cameraLiveFlip: "扫描翻译切换前后摄像头"
+            case .cameraLiveDirection: "扫描翻译切换方向"
+            case .cameraLiveTranslateSwitch: "扫描翻译开关自动扫描"
             }
         }
     }
@@ -204,7 +222,7 @@ enum PrivacyPolicy {
         ("我们收集什么", "为了了解哪些功能有用、把快译做得更好，快译会收集匿名的使用数据：你使用了哪些功能（例如查词、翻译、拍照翻译、同声传译、面对面对话、场景练习）、功能的使用时长和次数、你的设备型号、系统版本和 App 版本。这些数据不能识别你是谁。"),
         ("我们不收集什么", "你输入或说出的内容、翻译的文字、拍摄或选择的图片、录音、会话和记录的内容、生词本、你的 API Key，都不会上传给我们或统计服务商。"),
         ("数据交给谁处理", "使用数据由友盟+（Umeng）提供的统计服务处理，详见友盟+的隐私政策。快译没有自己的服务器。"),
-        ("你的内容在哪里", "会话、图片、录音和各种记录只保存在你的设备上，删除 App 就会一起删除。翻译和 AI 功能会按你的选择，把需要翻译的文字发给翻译服务或你自己填写的 AI 服务商。"),
+        ("你的内容在哪里", "会话、图片、录音和各种记录只保存在你的设备上，删除 App 就会一起删除。翻译和 AI 功能会按你的选择，把需要翻译的文字发给翻译服务或你自己填写的 AI 服务商。同声传译的录音只有在你点“精校”并确认后，才会用你自己的 OpenAI API Key 从设备直接发给 OpenAI 做语音转写，不经过我们的服务器。"),
         ("你的选择", "快译默认统计匿名使用数据。你可以随时在下面关闭，关闭后快译的全部功能照常使用，只是不再统计。"),
     ]
 }
